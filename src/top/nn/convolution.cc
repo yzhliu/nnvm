@@ -7,9 +7,20 @@
 #include <nnvm/node.h>
 #include <nnvm/op_attr_types.h>
 #include <nnvm/top/nn.h>
+#include <tvm/tensor.h>
+#include <tvm/packed_func_ext.h>
+#include <nnvm/compiler/op_attr_types.h>
+#include <tvm/tvm.h>
+#include <topi/transform.h>
 #include "./nn_common.h"
 #include "../op_common.h"
 #include "../elemwise_op_common.h"
+#include "topi/nn.h"
+
+
+using tvm::Tensor;
+using tvm::Array;
+using nnvm::compiler::FTVMCompute;
 
 namespace nnvm {
 namespace top {
@@ -48,10 +59,10 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                  param.kernel_size[0],
                  param.kernel_size[1]});
 
-  wshape = ConvertLayout(wshape, kNCHW, param.layout);
-  wshape[0] *= param.groups;
-
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
+//  wshape = ConvertLayout(wshape, kNCHW, param.layout);
+//  wshape[0] *= param.groups;
+//
+//  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
   if (param.use_bias) {
     NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape,
                             Conv2DParam::kBias, TShape({param.channels}));
@@ -121,6 +132,12 @@ a bias vector is created and added to the outputs.
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DParam>)
 .set_support_level(2)
+//.set_attr<FTVMCompute>(
+//"FTVMCompute", [](const NodeAttrs& attrs,
+//                  const Array<Tensor>& inputs,
+//                  const Array<Tensor>& out_info) {
+//  return Array<Tensor>{ topi::reshape(out_info[0], out_info[0]->shape) };
+//})
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
                   const std::vector<NodeEntry>& ograds) {

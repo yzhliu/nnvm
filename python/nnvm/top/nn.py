@@ -94,6 +94,7 @@ def schedule_conv2d(attrs, outs, target):
         return topi.generic.schedule_depthwise_conv2d_nchw(outs)
 
 reg.register_pattern("conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
+# reg.register_schedule("conv2d", _fschedule_broadcast)
 
 
 # conv2d_transpose

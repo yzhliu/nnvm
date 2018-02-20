@@ -232,8 +232,11 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
         dtype.update(zip(graph.index.input_names, idtype))
     # Apply optimization
     graph = optimize(graph, shape, dtype)
+    with open('before_pre_graph.json', 'w') as fn:
+        fn.writelines(graph.json())
     # Precompute prune
     if params and cfg.pass_enabled("PrecomputePrune"):
+        print('Start pre-compute ...')
         graph, params = precompute_prune(graph, params)
         shape, dtype = _update_shape_dtype(shape, dtype, params)
     # Operator Fusion and generation
@@ -274,6 +277,7 @@ def _run_graph(graph, params):
     dtype = {k : v.dtype for k, v in params.items()}
     target = "llvm"
     ctx = tvm.cpu(0)
+    print('precompute shapes: ' + str(shape))
     _, oshape = graph_util.infer_shape(graph, **shape)
     _, odtype = graph_util.infer_dtype(graph, **dtype)
     graph, libmod, _ = build(graph, target, shape, dtype)
@@ -322,6 +326,9 @@ def precompute_prune(graph, params):
     if pre_graph is None:
         return graph, params
     out_names = pre_graph.json_attr("output_names")
+    print('pre_graph output_names: ' + str(out_names))
+    with open('pre_graph.json', 'w') as fn:
+        fn.writelines(pre_graph.json())
     if not pre_graph.symbol.list_output_names():
         return graph, params
     with tvm.build_config(auto_unroll_max_step=0):

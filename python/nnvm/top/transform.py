@@ -18,6 +18,10 @@ reg.register_schedule("transpose", _fschedule_injective)
 reg.register_pattern("reshape", OpPattern.INJECTIVE)
 reg.register_schedule("reshape", _fschedule_injective)
 
+# reorder
+reg.register_pattern("reorder", OpPattern.INJECTIVE)
+reg.register_schedule("reorder", _fschedule_injective)
+
 # squeeze
 reg.register_pattern("squeeze", OpPattern.INJECTIVE)
 reg.register_schedule("squeeze", _fschedule_injective)
