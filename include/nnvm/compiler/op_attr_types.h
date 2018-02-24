@@ -16,6 +16,7 @@
 #include <nnvm/graph.h>
 #include <vector>
 #include <string>
+#include "packed_func_ext.h"
 
 namespace nnvm {
 namespace compiler {
@@ -72,6 +73,11 @@ using FTVMSchedule = std::function<
   Schedule(const NodeAttrs& attrs,
            const Array<Tensor>& outs,
            const std::string& target)>;
+
+using FTVMWeightPrepack = std::function<
+  Symbol(const NodeAttrs& attrs,
+         const SymbolArray& inputs,
+         const Array<Tensor>& tinfo)>;
 
 /*! \brief Layout Information about an entry */
 using TLayoutInfo = std::string;
