@@ -75,9 +75,7 @@ using FTVMSchedule = std::function<
            const std::string& target)>;
 
 using FTVMWeightPrepack = std::function<
-  Symbol(const NodeAttrs& attrs,
-         const SymbolArray& inputs,
-         const Array<Tensor>& tinfo)>;
+  Symbol(const SymbolArray& inputs)>;
 
 /*! \brief Layout Information about an entry */
 using TLayoutInfo = std::string;

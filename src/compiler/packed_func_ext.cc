@@ -18,6 +18,7 @@ namespace runtime {
 TVM_REGISTER_EXT_TYPE(nnvm::Graph);
 TVM_REGISTER_EXT_TYPE(nnvm::Symbol);
 TVM_REGISTER_EXT_TYPE(nnvm::compiler::AttrDict);
+TVM_REGISTER_EXT_TYPE(nnvm::compiler::SymbolArray);
 
 }  // namespace runtime
 }  // namespace tvm
@@ -63,6 +64,23 @@ TVM_REGISTER_GLOBAL("nnvm.compiler._dict_keys")
     *rv = keys;
   });
 
+TVM_REGISTER_GLOBAL("nnvm.compiler._symbol_array_get")
+.set_body([](TVMArgs args, TVMRetValue *rv) {
+    const SymbolArray& arr = args[0].AsExtension<SymbolArray>();
+    int i = args[1];
+    if (i >= arr.size()) {
+      *rv = nullptr;
+    } else {
+      *rv = *(arr[i]);
+    }
+  });
+
+TVM_REGISTER_GLOBAL("nnvm.compiler._symbol_array_size")
+.set_body([](TVMArgs args, TVMRetValue *rv) {
+    const SymbolArray& arr = args[0].AsExtension<SymbolArray>();
+    *rv = static_cast<int64_t>(arr.size());
+  });
+
 // custom version of TVM compute
 TVM_REGISTER_GLOBAL("nnvm._register_compute")
 .set_body([](TVMArgs args, TVMRetValue *rv) {
@@ -88,10 +106,8 @@ TVM_REGISTER_GLOBAL("nnvm._register_weight_prepack")
   // Intentionally copy and not de-allocate it, to avoid free pyobject during shutdown
   PackedFunc* f = new PackedFunc(args[1].operator PackedFunc());
   Op& op = ::dmlc::Registry<nnvm::Op>::Get()->__REGISTER_OR_GET__(args[0]);
-  auto fpack = [f](const NodeAttrs& attrs,
-                   const SymbolArray& inputs,
-                   const Array<Tensor>& shape_info) {
-    TVMRetValue ret = (*f)(GetAttrDict(attrs), inputs, shape_info);
+  auto fpack = [f](const SymbolArray& inputs) {
+    TVMRetValue ret = (*f)(inputs);
     CHECK_EQ(ret.type_code(), tvm::runtime::extension_class_info<Symbol>::code)
       << " expected " << "Symbol (code = " << tvm::runtime::extension_class_info<Symbol>::code
       << ") but get code = " << ret.type_code();

@@ -19,7 +19,7 @@ namespace compiler {
 using tvm::runtime::PackedFunc;
 
 using AttrDict = std::unordered_map<std::string, std::string>;
-using SymbolArray = std::vector<Symbol>;
+using SymbolArray = std::vector<const Symbol*>;
 
 /*!
  * \brief Get PackedFunction from global registry and
