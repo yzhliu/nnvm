@@ -117,7 +117,7 @@ def register_weight_prepack(op_name, f=None, level=10):
     """
     def register(myf):
         """internal register function"""
-        _register_compute(op_name, myf, level)
+        _register_weight_prepack(op_name, myf, level)
         return myf
     return register(f) if f else register
 

@@ -291,7 +291,7 @@ void Symbol::Compose(const array_view<const Symbol*>& args,
     // TODO
     nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
     if (fn_prepack != nullptr) {
-      fprintf(stderr, "Get FTVMWeightPrepack!");
+      fprintf(stderr, "Get FTVMWeightPrepack!\n");
       std::vector<const Symbol *> input_syms;
       for (size_t i = 0; i < args.size(); ++i) {
         input_syms.push_back(args[i]);

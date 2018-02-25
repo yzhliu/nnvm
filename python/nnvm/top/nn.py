@@ -95,10 +95,11 @@ def schedule_conv2d(attrs, outs, target):
 
 reg.register_pattern("conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
-@reg.register_weight_prepack("conv2d", level=9)
+@reg.register_weight_prepack("conv2d")
 def weight_prepack_conv2d(inputs):
-    print("Conv input size: " + len(inputs))
+    print("Conv input size: " + str(len(inputs)))
     print("Conv input 1: " + str(inputs[1]))
+    return inputs[0]
 
 
 # conv2d_transpose
