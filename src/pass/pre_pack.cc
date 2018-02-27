@@ -70,7 +70,7 @@ Graph PrePack(const Graph& src) {
   std::unordered_map<const Node*, tvm::Array<tvm::Tensor> > tinfos;
   std::unordered_map<const Node*, Symbol> replace_symbol;
 
-  DFSVisit(src.outputs, [&tinfos, &idx_graph, &node_indexes, &shape_vec, &dtype_vec](const NodePtr& n) {
+  DFSVisit(src.outputs, [&replace_symbol, &tinfos, &idx_graph, &node_indexes, &shape_vec, &dtype_vec](const NodePtr& n) {
     std::string op_name = n->is_variable() ? "Variable" : n->op()->name;
 
     // record the shape of each node
@@ -93,19 +93,17 @@ Graph PrePack(const Graph& src) {
       vec.push_back(tvm::placeholder(shape, GetTVMType(dtype_vec[idx_graph.entry_id(nid, i)])));
     }
 
-    // compose for replaced symbol
-    /*
-    for (uint32_t i = 0; i < n->num_inputs(); ++i) {
-      auto& input = n->inputs[i];
-      if (replace_symbol.count(input.node.get())) {
-        auto& replaced_sym = replace_symbol[input.node.get()];
-        CHECK_EQ(replaced_sym.outputs.size(), 1) << "Pre-pack only support operators have one output.";
-        n->inputs[i] = replaced_sym.outputs[0];
-      }
-    }
-     */
-
     if (!n->is_variable()) {
+      // compose for replaced symbol
+      for (uint32_t i = 0; i < n->num_inputs(); ++i) {
+        auto& input = n->inputs[i];
+        if (replace_symbol.count(input.node.get())) {
+          auto& replaced_sym = replace_symbol[input.node.get()];
+          CHECK_EQ(replaced_sym.outputs.size(), 1) << "Pre-pack only support operators have one output.";
+          n->inputs[i] = replaced_sym.outputs[0];
+        }
+      }
+
       nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
       if (fn_prepack != nullptr) {
         fprintf(stderr, "Get FTVMWeightPrepack!\n");
@@ -129,7 +127,7 @@ Graph PrePack(const Graph& src) {
         }
 
         auto s = fn_prepack(n->attrs, input_syms, input_shapes);
-//        replace_symbol[n.get()] = s;
+        replace_symbol[n.get()] = s;
 
         for (auto iter = input_syms.begin(); iter != input_syms.end(); ++iter) {
           delete *iter;
