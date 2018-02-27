@@ -132,12 +132,6 @@ a bias vector is created and added to the outputs.
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DParam>)
 .set_support_level(2)
-//.set_attr<FTVMCompute>(
-//"FTVMCompute", [](const NodeAttrs& attrs,
-//                  const Array<Tensor>& inputs,
-//                  const Array<Tensor>& out_info) {
-//  return Array<Tensor>{ topi::reshape(out_info[0], out_info[0]->shape) };
-//})
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
                   const std::vector<NodeEntry>& ograds) {

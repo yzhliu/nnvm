@@ -144,6 +144,7 @@ void Symbol::Print(std::ostream &os) const {
         } else {
           os << "--------------------\n";
           os << "Op:" << node->op()->name << ", Name=" << node->attrs.name << '\n'
+
              << "Inputs:\n";
           for (size_t i = 0; i < node->inputs.size(); ++i) {
             const NodeEntry& e = node->inputs[i];
@@ -172,6 +173,7 @@ void Symbol::Print(std::ostream &os) const {
           }
         }
       });
+
   }
 }
 
@@ -268,8 +270,6 @@ void Symbol::Compose(const array_view<const Symbol*>& args,
                      const std::string& name) {
   static auto& flist_inputs = Op::GetAttr<FListInputNames>("FListInputNames");
   static auto& fset_attrs = Op::GetAttr<FSetInputVarAttrOnCompose>("FSetInputVarAttrOnCompose");
-  static auto& fweight_prepack =
-    Op::GetAttr<nnvm::compiler::FTVMWeightPrepack>("FTVMWeightPrepack");
 
   // parameter check.
   for (size_t i = 0; i < args.size(); ++i) {
@@ -287,17 +287,6 @@ void Symbol::Compose(const array_view<const Symbol*>& args,
   if (IsAtomic(outputs)) {
     Node* n = outputs[0].node.get();
     uint32_t n_req = n->num_inputs();
-
-    // TODO
-    nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
-    if (fn_prepack != nullptr) {
-      fprintf(stderr, "Get FTVMWeightPrepack!\n");
-      std::vector<const Symbol *> input_syms;
-      for (size_t i = 0; i < args.size(); ++i) {
-        input_syms.push_back(args[i]);
-      }
-      fn_prepack(input_syms);
-    }
 
     if (n_req != kVarg) {
       n->inputs.resize(n_req);
