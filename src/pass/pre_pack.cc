@@ -41,12 +41,6 @@ tvm::Type GetTVMType(int type_flag) {
   }
 }
 
-inline Symbol GetSymbol(NodeEntry &output) {
-  Symbol sym;
-  sym.outputs.push_back(output);
-  return sym;
-}
-
 Graph PrePack(const Graph& src) {
   static auto& fweight_prepack =
     Op::GetAttr<nnvm::compiler::FTVMWeightPrepack>("FTVMWeightPrepack");
@@ -54,12 +48,6 @@ Graph PrePack(const Graph& src) {
   const ShapeVector& shape_vec = src.GetAttr<ShapeVector>("shape");
   const DTypeVector& dtype_vec = src.GetAttr<DTypeVector>("dtype");
   const IndexedGraph& idx_graph = src.indexed_graph();
-
-  /*
-  auto &shape = shape_vec[0];
-  fprintf(stderr, "Shape[0] ndim: %d\n", shape.ndim());
-  fprintf(stderr, "Shape[1] ndim: %d\n", shape_vec[1].ndim());
-   */
 
   std::unordered_map<const Node*, uint32_t> node_indexes;
   for (uint32_t nid = 0; nid < idx_graph.num_nodes(); ++nid) {
@@ -100,13 +88,13 @@ Graph PrePack(const Graph& src) {
         if (replace_symbol.count(input.node.get())) {
           auto& replaced_sym = replace_symbol[input.node.get()];
           CHECK_EQ(replaced_sym.outputs.size(), 1) << "Pre-pack only support operators have one output.";
+          input.node->inputs.clear();
           n->inputs[i] = replaced_sym.outputs[0];
         }
       }
 
       nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
       if (fn_prepack != nullptr) {
-        fprintf(stderr, "Get FTVMWeightPrepack!\n");
         CHECK_EQ(n->num_outputs(), 1) << "Pre-pack only support operators have one output.";
 
         std::vector<const Symbol*> input_syms;
@@ -134,12 +122,17 @@ Graph PrePack(const Graph& src) {
         }
       }
     }
+    /*
     uint32_t idx = node_indexes.count(n.get()) ? node_indexes[n.get()] : 100000;
     fprintf(stderr, "Visit node [%s](index = %d) with %d inputs, %d outputs, %d deps.\n",
             op_name.c_str(), idx,
             n->num_inputs(), n->num_outputs(), n->control_deps.size());
+            */
   });
-  return src;
+
+  Graph ret;
+  ret.outputs = src.outputs;
+  return ret;
 }
 
 // register pass
