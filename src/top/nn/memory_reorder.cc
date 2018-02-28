@@ -48,14 +48,26 @@ inline bool ReorderInferShape(const nnvm::NodeAttrs& attrs,
   const TShape& shp = (*in_shape)[0];
   if (shp.ndim() == 0) return false;
 
-  // (oc, ic, h, w) -> (OC, IC, h, w, ic, oc)
   TShape ret(shp.ndim() + 2);
-  ret[0] = shp[0] / param.oc_bn;
-  ret[1] = shp[1] / param.ic_bn;
-  ret[2] = shp[2];
-  ret[3] = shp[3];
-  ret[4] = param.ic_bn;
-  ret[5] = param.oc_bn;
+  auto h = shp[2];
+  auto w = shp[3];
+  if (h == 1 && w == 1) {
+    // (oc, ic, h, w) -> (OC, IC, ic, oc, h, w)
+    ret[0] = shp[0] / param.oc_bn;
+    ret[1] = shp[1] / param.ic_bn;
+    ret[2] = param.ic_bn;
+    ret[3] = param.oc_bn;
+    ret[4] = h;
+    ret[5] = w;
+  } else {
+    // (oc, ic, h, w) -> (OC, IC, h, w, ic, oc)
+    ret[0] = shp[0] / param.oc_bn;
+    ret[1] = shp[1] / param.ic_bn;
+    ret[2] = shp[2];
+    ret[3] = shp[3];
+    ret[4] = param.ic_bn;
+    ret[5] = param.oc_bn;
+  }
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, ret);
   return true;
 }
