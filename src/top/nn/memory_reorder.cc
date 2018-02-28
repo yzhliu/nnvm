@@ -28,12 +28,15 @@ using nnvm::compiler::FTVMCompute;
 struct ReorderParam : public dmlc::Parameter<ReorderParam> {
   int oc_bn;
   int ic_bn;
+  bool kernel_1x1;
 
   DMLC_DECLARE_PARAMETER(ReorderParam) {
     DMLC_DECLARE_FIELD(oc_bn).set_lower_bound(1)
     .describe("Output channel number of block.");
     DMLC_DECLARE_FIELD(ic_bn).set_lower_bound(1)
     .describe("Input channel number of block.");
+    DMLC_DECLARE_FIELD(kernel_1x1).set_default(false)
+    .describe("Whether it is 1x1 kernel.");
   }
 };
 
@@ -51,7 +54,7 @@ inline bool ReorderInferShape(const nnvm::NodeAttrs& attrs,
   TShape ret(shp.ndim() + 2);
   auto h = shp[2];
   auto w = shp[3];
-  if (h == 1 && w == 1) {
+  if (param.kernel_1x1) {
     // (oc, ic, h, w) -> (OC, IC, ic, oc, h, w)
     ret[0] = shp[0] / param.oc_bn;
     ret[1] = shp[1] / param.ic_bn;
@@ -63,8 +66,8 @@ inline bool ReorderInferShape(const nnvm::NodeAttrs& attrs,
     // (oc, ic, h, w) -> (OC, IC, h, w, ic, oc)
     ret[0] = shp[0] / param.oc_bn;
     ret[1] = shp[1] / param.ic_bn;
-    ret[2] = shp[2];
-    ret[3] = shp[3];
+    ret[2] = h;
+    ret[3] = w;
     ret[4] = param.ic_bn;
     ret[5] = param.oc_bn;
   }
@@ -88,7 +91,8 @@ NNVM_REGISTER_OP(reorder)
                   const Array<Tensor>& inputs,
                   const Array<Tensor>& out_info) {
   const ReorderParam& param = nnvm::get<ReorderParam>(attrs.parsed);
-  return Array<Tensor>{ topi::reorder(inputs[0], out_info[0]->shape, param.oc_bn, param.ic_bn) };
+  return Array<Tensor>{ topi::reorder(inputs[0], out_info[0]->shape,
+                                      param.oc_bn, param.ic_bn, param.kernel_1x1) };
 })
 .set_support_level(1);
 
