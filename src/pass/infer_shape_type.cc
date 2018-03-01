@@ -146,6 +146,7 @@ Graph InferAttr(Graph &&ret,
         oshape[i] = rshape[idx.entry_id(nid, i)];
         if (fis_none(oshape[i])) forward_known = false;
       }
+//      fprintf(stderr, "Infer: %s\n", inode.source->op()->name.c_str());
       auto finfer = finfer_shape.get(inode.source->op(), fdefault);
       if (!forward_known) {
         if (finfer != nullptr) {

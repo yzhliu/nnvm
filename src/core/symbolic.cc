@@ -6,6 +6,7 @@
 #include <nnvm/graph.h>
 #include <nnvm/symbolic.h>
 #include <nnvm/op_attr_types.h>
+#include <nnvm/compiler/op_attr_types.h>
 
 namespace nnvm {
 
@@ -143,6 +144,7 @@ void Symbol::Print(std::ostream &os) const {
         } else {
           os << "--------------------\n";
           os << "Op:" << node->op()->name << ", Name=" << node->attrs.name << '\n'
+
              << "Inputs:\n";
           for (size_t i = 0; i < node->inputs.size(); ++i) {
             const NodeEntry& e = node->inputs[i];
@@ -171,6 +173,7 @@ void Symbol::Print(std::ostream &os) const {
           }
         }
       });
+
   }
 }
 

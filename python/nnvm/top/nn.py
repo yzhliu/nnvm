@@ -95,6 +95,41 @@ def schedule_conv2d(attrs, outs, target):
 
 reg.register_pattern("conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
+@reg.register_compute("conv2d_prepack")
+def compute_conv2d_prepack(attrs, inputs, _):
+    """Compute definition of conv2d"""
+    padding = attrs.get_int_tuple("padding")
+    strides = attrs.get_int_tuple("strides")
+    dilation = attrs.get_int_tuple("dilation")
+    kh, kw = attrs.get_int_tuple('kernel_size')
+    groups = attrs.get_int("groups")
+    channels = attrs.get_int("channels")
+    layout = attrs["layout"]
+    assert layout == "NCHW", "only support nchw for now"
+    assert dilation == (1, 1), "not support dilate now"
+    if groups == 1:
+        out = topi.nn.conv2d_prepack(inputs[0], inputs[1], (channels, kh, kw), strides, padding)
+    else:
+        raise ValueError("not support arbitrary group number > 1 for now")
+    if attrs.get_bool("use_bias"):
+        bias = inputs[2]
+        bias = topi.expand_dims(bias, axis=1, num_newaxis=2)
+        out = topi.broadcast_add(out, bias)
+    return out
+
+@reg.register_schedule("conv2d_prepack")
+def schedule_conv2d_prepack(attrs, outs, target):
+    """Schedule definition of conv2d"""
+    groups = attrs.get_int("groups")
+    kh, kw = attrs.get_int_tuple('kernel_size')
+    oc = attrs.get_int("channels")
+    with tvm.target.create(target):
+        if groups == 1:
+            return topi.generic.schedule_conv2d_prepack((oc, kh, kw), outs)
+        else:
+            raise ValueError("not support group number > 1 for now")
+
+reg.register_pattern("conv2d_prepack", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # conv2d_transpose
 @reg.register_compute("conv2d_transpose")

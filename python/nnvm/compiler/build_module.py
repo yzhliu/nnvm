@@ -224,16 +224,33 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
     cfg = BuildConfig.current
     graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)
     shape, dtype = _update_shape_dtype(shape, dtype, params)
+
+    # pre pack
+    graph = graph_attr.set_shape_inputs(graph, shape)
+    graph = graph_attr.set_dtype_inputs(graph, dtype)
+    graph = graph.apply("InferShape").apply("InferType").apply("PrePack")
+    # TODO
+    # if not isinstance(dtype, str):
+    #     graph_util.infer_dtype(graph, **dtype)
+    print("PrePack done ...")
+
     # Initial pass do shape type inference
     ishape, _ = graph_util.infer_shape(graph, **shape)
     shape.update(zip(graph.index.input_names, ishape))
     if not isinstance(dtype, str):
         idtype, _ = graph_util.infer_dtype(graph, **dtype)
         dtype.update(zip(graph.index.input_names, idtype))
+
     # Apply optimization
+    print("start optimize ...")
     graph = optimize(graph, shape, dtype)
+    print("start dump graph...")
+    with open('before_pre_graph.json', 'w') as fn:
+        fn.writelines(graph.json())
+    print("start precompute ...")
     # Precompute prune
     if params and cfg.pass_enabled("PrecomputePrune"):
+        print('Start pre-compute ...')
         graph, params = precompute_prune(graph, params)
         shape, dtype = _update_shape_dtype(shape, dtype, params)
     # Operator Fusion and generation
@@ -250,6 +267,7 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
     with target:
         graph = graph.apply("GraphFusePartition").apply("GraphFuseCompile")
     libmod = graph_attr._move_out_module(graph, "module")
+    print("build_module done.")
     return graph, libmod, params
 
 
@@ -322,6 +340,8 @@ def precompute_prune(graph, params):
     if pre_graph is None:
         return graph, params
     out_names = pre_graph.json_attr("output_names")
+    with open('pre_graph.json', 'w') as fn:
+        fn.writelines(pre_graph.json())
     if not pre_graph.symbol.list_output_names():
         return graph, params
     with tvm.build_config(auto_unroll_max_step=0):

@@ -115,7 +115,7 @@ inline bool BinaryBroadcastShape(const nnvm::NodeAttrs& attrs,
       } else {
         CHECK(l == 1 || r == 1)
           << "operands could not be broadcast together with shapes "
-          << lhs << " " << rhs;
+          << lhs << " " << rhs << ", l=" << l << ", r=" << r;
         out[i] = std::max(l, r);
       }
     } else {

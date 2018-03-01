@@ -7,9 +7,20 @@
 #include <nnvm/node.h>
 #include <nnvm/op_attr_types.h>
 #include <nnvm/top/nn.h>
+#include <tvm/tensor.h>
+#include <tvm/packed_func_ext.h>
+#include <nnvm/compiler/op_attr_types.h>
+#include <tvm/tvm.h>
+#include <topi/transform.h>
 #include "./nn_common.h"
 #include "../op_common.h"
 #include "../elemwise_op_common.h"
+#include "topi/nn.h"
+
+
+using tvm::Tensor;
+using tvm::Array;
+using nnvm::compiler::FTVMCompute;
 
 namespace nnvm {
 namespace top {
@@ -48,10 +59,10 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                  param.kernel_size[0],
                  param.kernel_size[1]});
 
-  wshape = ConvertLayout(wshape, kNCHW, param.layout);
-  wshape[0] *= param.groups;
-
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
+//  wshape = ConvertLayout(wshape, kNCHW, param.layout);
+//  wshape[0] *= param.groups;
+//
+//  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
   if (param.use_bias) {
     NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape,
                             Conv2DParam::kBias, TShape({param.channels}));
@@ -129,6 +140,37 @@ a bias vector is created and added to the outputs.
                          n->inputs[Conv2DParam::kWeight]},
                         n->attrs.dict);
 });
+
+
+NNVM_REGISTER_OP(conv2d_prepack)
+.describe(R"code(2D convolution layer (e.g. spatial convolution over images).
+
+This layer creates a convolution kernel that is convolved
+with the layer input to produce a tensor of
+outputs. If `use_bias` is True,
+a bias vector is created and added to the outputs.
+
+- **data**: This depends on the `layout` parameter. Input is 4D array of shape
+            (batch_size, in_channels, height, width) if `layout` is `NCHW`.
+- **weight**: (channels, in_channels, kernel_size[0], kernel_size[1])
+- **bias**: (channels,)
+- **out**:  This depends on the `layout` parameter. Output is 4D array of shape
+            (batch_size, channels, out_height, out_width) if `layout` is `NCHW`.
+
+)code" NNVM_ADD_FILELINE)
+.add_argument("data", "4D Tensor", "Input data.")
+.add_argument("weight", "4D Tensor", "Weight matrix.")
+.add_argument("bias", "1D Tensor", "Bias parameter.")
+.add_arguments(Conv2DParam::__FIELDS__())
+.set_attr_parser(ParamParser<Conv2DParam>)
+.set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Conv2DParam>)
+.set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DParam>)
+.set_attr<FInferShape>("FInferShape", Conv2DInferShape)
+.set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_num_outputs(1)
+.set_num_inputs(UseBiasNumInputs<Conv2DParam>)
+.set_support_level(2);
+
 
 NNVM_REGISTER_OP(_conv2d_grad)
   .describe(R"code(2D convolution grad.
