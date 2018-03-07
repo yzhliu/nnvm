@@ -23,7 +23,8 @@ enum LayoutFlag {
   kCWN,
   kNCDHW,
   kNDHWC,
-  kCDHWN
+  kCDHWN,
+  kNCHWc
 };
 
 struct DenseParam : public dmlc::Parameter<DenseParam> {
@@ -231,6 +232,7 @@ struct Pool2DParam : public dmlc::Parameter<Pool2DParam> {
     DMLC_DECLARE_FIELD(layout)
       .add_enum("NCHW", kNCHW)
       .add_enum("NHWC", kNHWC)
+      .add_enum("NCHWc", kNCHWc)
       .set_default(kNCHW)
       .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
                 "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"

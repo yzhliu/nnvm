@@ -30,11 +30,11 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
 
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
-  dshape = ConvertLayout(dshape, param.layout, kNCHW);
+//  dshape = ConvertLayout(dshape, param.layout, kNCHW);
 
   TShape oshape = dshape;
-  CHECK_EQ(dshape.ndim(), 4U)
-      << "Pooling: Input data should be 4D";
+//  CHECK_EQ(dshape.ndim(), 4U)
+//      << "Pooling: Input data should be 4D";
   CHECK(param.pool_size[0] <= dshape[2] + 2 * param.padding[0])
       << "pool size (" << param.pool_size[0] << ") exceeds input (" << dshape[2]
       << " padded to " << (dshape[2] + 2*param.padding[0]) << ")";
@@ -53,7 +53,7 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
     oshape[3] = ((dshape[3] + 2 * param.padding[1] - param.pool_size[1] +
                   param.strides[1] - 1) / param.strides[1]) + 1;
   }
-  oshape = ConvertLayout(oshape, kNCHW, param.layout);
+//  oshape = ConvertLayout(oshape, kNCHW, param.layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
   return true;
 }
@@ -91,10 +91,17 @@ NNVM_REGISTER_OP(max_pool2d)
     auto strides = ShapeToArray(param.strides);
     auto padding = ShapeToArray(param.padding);
     auto ceil_mode = param.ceil_mode;
-    CHECK_EQ(param.layout, kNCHW)
-      << "max_pool2d currently only supports NCHW layout";
-    return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kMaxPool, ceil_mode) };
+    CHECK(param.layout == kNCHW || param.layout == kNCHWc)
+      << "max_pool2d currently only supports NCHW or NCHWc layout";
+    CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
+      << "max_pool2d currently only supports NCHW or NCHWc layout";
+    if (inputs[0].ndim() == 4) {
+      return Array<Tensor>{
+      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kMaxPool, ceil_mode)};
+    } else {
+      return Array<Tensor>{
+      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kMaxPool, ceil_mode, "NCHWc")};
+    }
 })
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
@@ -152,10 +159,18 @@ NNVM_REGISTER_OP(avg_pool2d)
     auto strides = ShapeToArray(param.strides);
     auto padding = ShapeToArray(param.padding);
     auto ceil_mode = param.ceil_mode;
-    CHECK_EQ(param.layout, kNCHW)
-      << "avg_pool2d currently only supports NCHW layout";
-    return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kAvgPool, ceil_mode) };
+
+    CHECK(param.layout == kNCHW || param.layout == kNCHWc)
+      << "max_pool2d currently only supports NCHW or NCHWc layout";
+    CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
+      << "max_pool2d currently only supports NCHW or NCHWc layout";
+    if (inputs[0].ndim() == 4) {
+      return Array<Tensor>{
+      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kAvgPool, ceil_mode)};
+    } else {
+      return Array<Tensor>{
+      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kAvgPool, ceil_mode, "NCHWc")};
+    }
 })
 .set_num_outputs(1)
 .set_num_inputs(1)

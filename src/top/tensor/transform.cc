@@ -173,6 +173,7 @@ DMLC_REGISTER_PARAMETER(ExpandDimsParam);
 inline bool ExpandDimsInferShape(const NodeAttrs& attrs,
                                  std::vector<TShape>* in_shape,
                                  std::vector<TShape>* out_shape) {
+  fprintf(stderr, "start ExpandDimsInferShape\n");
   const ExpandDimsParam& param = nnvm::get<ExpandDimsParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   const TShape& dshape = in_shape->at(0);
@@ -191,6 +192,7 @@ inline bool ExpandDimsInferShape(const NodeAttrs& attrs,
   }
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0,
                            TShape(oshape.begin(), oshape.end()));
+  fprintf(stderr, "end ExpandDimsInferShape\n");
   return true;
 }
 
@@ -198,7 +200,7 @@ NNVM_REGISTER_OP(expand_dims)
 .describe(R"code(Inserts a new axis of size 1 into the array shape
 
 For example, given ``x`` with shape ``(2,3,4)``, then ``expand_dims(x, axis=1, num_newaxis=5)``
-will return a new array with shape ``(2,5,3,4)``.
+will return a new array with shape ``(2,1,1,1,1,1,3,4)``.
 
 )code" NNVM_ADD_FILELINE)
 .add_argument("data", "Tensor", "Input tensor")

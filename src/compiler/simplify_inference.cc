@@ -60,13 +60,23 @@ BatchNormToInferUnpack(const nnvm::NodeAttrs& attrs,
         "elemwise_add", bn_name + "_add_beta", {shift, beta});
   }
   int axis = param.axis;
-  scale = ExpandBiasToMatchAxis(scale, dshape.ndim(), 1, axis);
-  shift = ExpandBiasToMatchAxis(shift, dshape.ndim(), 1, axis);
+//  fprintf(stderr, "BN dshape.ndim=%d, axis=%d\n", dshape.ndim(), axis);
+  if (dshape.ndim() == 5) {
+    const auto bn = dshape[4];
+    std::unordered_map<std::string, std::string> kwargs{{"bn", std::to_string(bn)}};
+    scale = MakeNode("bn_reorder", scale.node->attrs.name + "_bnreorder", {scale}, kwargs);
+    scale = ExpandBiasToMatchAxis(scale, dshape.ndim()-1, 1, axis);
+    shift = MakeNode("bn_reorder", shift.node->attrs.name + "_bnreorder", {shift}, kwargs);
+    shift = ExpandBiasToMatchAxis(shift, dshape.ndim()-1, 1, axis);
+  } else {
+    scale = ExpandBiasToMatchAxis(scale, dshape.ndim(), 1, axis);
+    shift = ExpandBiasToMatchAxis(shift, dshape.ndim(), 1, axis);
+  }
   NodeEntry out = MakeNode("broadcast_mul", bn_name + "_a_mul_data",
                            {data, scale});
   out = MakeNode("broadcast_add", bn_name + "_out",
                  {out, shift});
-  // It is invalid to ref the other values of BN after infernece transform.
+  // It is invalid to ref the other values of BN after inference transform.
   NodeEntry undef = MakeNode("__undef__", "undef", {});
   return {out, undef, undef};
 }

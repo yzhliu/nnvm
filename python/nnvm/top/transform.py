@@ -21,6 +21,10 @@ reg.register_schedule("reshape", _fschedule_injective)
 # reorder
 reg.register_pattern("reorder", OpPattern.INJECTIVE)
 reg.register_schedule("reorder", _fschedule_injective)
+reg.register_pattern("bn_reorder", OpPattern.INJECTIVE)
+reg.register_schedule("bn_reorder", _fschedule_injective)
+reg.register_pattern("data_reorder_back", OpPattern.INJECTIVE)
+reg.register_schedule("data_reorder_back", _fschedule_injective)
 
 # squeeze
 reg.register_pattern("squeeze", OpPattern.INJECTIVE)

@@ -196,7 +196,12 @@ inline bool BatchNormInferShape(const nnvm::NodeAttrs& attrs,
   if (dshape.ndim() == 0) return false;
   CHECK((size_t)param.axis < dshape.Size());
 
-  TShape bshape({dshape[param.axis]});
+  int arg_size = dshape[param.axis];
+  if (dshape.ndim() == 5) {
+    // nChwc
+    arg_size *= dshape[4];
+  }
+  TShape bshape({arg_size});
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 1, bshape);
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 2, bshape);
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 3, bshape);

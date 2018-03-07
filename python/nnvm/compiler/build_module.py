@@ -244,10 +244,13 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
     # Apply optimization
     print("start optimize ...")
     graph = optimize(graph, shape, dtype)
+    # print('---- shapes ----')
+    # ishape, oshape = graph_util.infer_shape(graph, **shape)
+    # print(zip(graph.index.input_names, ishape))
+    # print(zip(graph.index.output_entries, oshape))
     print("start dump graph...")
     with open('before_pre_graph.json', 'w') as fn:
         fn.writelines(graph.json())
-    print("start precompute ...")
     # Precompute prune
     if params and cfg.pass_enabled("PrecomputePrune"):
         print('Start pre-compute ...')
@@ -287,15 +290,22 @@ def _run_graph(graph, params):
     out_dict: dict of str to tvm.NDArray
         The output dictionaries.
     """
+    print('graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)')
     graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)
+    print('DONE graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)')
     shape = {k : v.shape for k, v in params.items()}
     dtype = {k : v.dtype for k, v in params.items()}
     target = "llvm"
     ctx = tvm.cpu(0)
+    print('graph_util.infer_shape(graph, **shape)')
     _, oshape = graph_util.infer_shape(graph, **shape)
+    print('graph_util.infer_dtype(graph, **dtype)')
     _, odtype = graph_util.infer_dtype(graph, **dtype)
+    print('build(graph, target, shape, dtype)')
     graph, libmod, _ = build(graph, target, shape, dtype)
+    print('m = graph_runtime.create(graph, libmod, ctx)')
     m = graph_runtime.create(graph, libmod, ctx)
+    print('DONE m = graph_runtime.create(graph, libmod, ctx)')
     set_input, run, get_output = m["set_input"], m["run"], m["get_output"]
     for k, v in params.items():
         set_input(k, tvm.nd.array(v))
@@ -345,5 +355,7 @@ def precompute_prune(graph, params):
     if not pre_graph.symbol.list_output_names():
         return graph, params
     with tvm.build_config(auto_unroll_max_step=0):
+        print('start to compute precompute')
         out_arrs = _run_graph(pre_graph, params)
+        print('end compute precompute')
     return graph, dict(zip(out_names, out_arrs))
