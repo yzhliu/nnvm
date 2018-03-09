@@ -60,7 +60,6 @@ BatchNormToInferUnpack(const nnvm::NodeAttrs& attrs,
         "elemwise_add", bn_name + "_add_beta", {shift, beta});
   }
   int axis = param.axis;
-//  fprintf(stderr, "BN dshape.ndim=%d, axis=%d\n", dshape.ndim(), axis);
   if (dshape.ndim() == 5) {
     const auto bn = dshape[4];
     std::unordered_map<std::string, std::string> kwargs{{"bn", std::to_string(bn)}};
@@ -111,7 +110,8 @@ Graph SimplifyInference(nnvm::Graph src) {
 }
 
 NNVM_REGISTER_PASS(SimplifyInference)
-.set_body(SimplifyInference);
+.set_body(SimplifyInference)
+.set_change_graph(true);
 
 }  // namespace compiler
 }  // namespace nnvm

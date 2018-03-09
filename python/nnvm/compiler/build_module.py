@@ -228,11 +228,13 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
     # pre pack
     graph = graph_attr.set_shape_inputs(graph, shape)
     graph = graph_attr.set_dtype_inputs(graph, dtype)
-    graph = graph.apply("InferShape").apply("InferType").apply("PrePack")
+    graph = graph.apply(["InferShape", "InferType", "PrePack"])
     # TODO
     # if not isinstance(dtype, str):
     #     graph_util.infer_dtype(graph, **dtype)
     print("PrePack done ...")
+    with open('prepacked_graph.json', 'w') as fn:
+        fn.writelines(graph.json())
 
     # Initial pass do shape type inference
     ishape, _ = graph_util.infer_shape(graph, **shape)

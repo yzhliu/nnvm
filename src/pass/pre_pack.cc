@@ -4,6 +4,7 @@
 #include <functional>
 #include <nnvm/compiler/op_attr_types.h>
 #include <nnvm/pass_functions.h>
+#include "../compiler/graph_transform.h"
 #include <tvm/tvm.h>
 
 namespace nnvm {
@@ -41,6 +42,22 @@ tvm::Type GetTVMType(int type_flag) {
   }
 }
 
+tvm::Array<tvm::Tensor> GetTensorInfo(const IndexedGraph& idx_graph,
+                                      const uint32_t nid,
+                                      const ShapeVector& shape_vec,
+                                      const DTypeVector& dtype_vec) {
+  tvm::Array<tvm::Tensor> vec;
+  for (uint32_t i = 0; i < idx_graph[nid].source->num_outputs(); ++i) {
+    tvm::Array<tvm::Expr> shape;
+    for (int64_t x : shape_vec[idx_graph.entry_id(nid, i)]) {
+      CHECK_LE(x, static_cast<int64_t>(std::numeric_limits<int>::max()));
+      shape.push_back(tvm::make_const(tvm::Int(32), x));
+    }
+    vec.push_back(tvm::placeholder(shape, GetTVMType(dtype_vec[idx_graph.entry_id(nid, i)])));
+  }
+  return vec;
+}
+
 Graph PrePack(const Graph& src) {
   static auto& fweight_prepack =
     Op::GetAttr<nnvm::compiler::FTVMWeightPrepack>("FTVMWeightPrepack");
@@ -49,90 +66,37 @@ Graph PrePack(const Graph& src) {
   const DTypeVector& dtype_vec = src.GetAttr<DTypeVector>("dtype");
   const IndexedGraph& idx_graph = src.indexed_graph();
 
-  std::unordered_map<const Node*, uint32_t> node_indexes;
-  for (uint32_t nid = 0; nid < idx_graph.num_nodes(); ++nid) {
-    const auto &inode = idx_graph[nid];
-    node_indexes[inode.source] = nid;
-  }
+  auto transform = [&](uint32_t nid, const NodePtr& n, std::vector<NodeEntry>* ret) {
+    if (n->is_variable()) return false;
 
-  std::unordered_map<const Node*, tvm::Array<tvm::Tensor> > tinfos;
-  std::unordered_map<const Node*, Symbol> replace_symbol;
+    nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
+    if (fn_prepack == nullptr) return false;
 
-  DFSVisit(src.outputs, [&replace_symbol, &tinfos, &idx_graph, &node_indexes, &shape_vec, &dtype_vec](const NodePtr& n) {
-    std::string op_name = n->is_variable() ? "Variable" : n->op()->name;
+    // construct parameters for registered function
+    std::vector<const Symbol*> op_inputs;
+    tvm::Array<tvm::Tensor> tensor_infos;
+    CHECK_EQ(n->num_inputs(), idx_graph[nid].inputs.size());
+    for (uint32_t i = 0; i < n->num_inputs(); ++i) {
+      const nnvm::NodeEntry& input = n->inputs[i];
+      // input operator
+      Symbol* op_input = new Symbol();
+      op_input->outputs.push_back(input);
+      op_inputs.push_back(static_cast<const Symbol*>(op_input));
 
-    // record the shape of each node
-    if (tinfos.count(n.get()) == 0) {
-      tinfos[n.get()] = tvm::Array<tvm::Tensor>{};
+      // input tinfo, extract from the original graph
+      // because it was where infer_shape & infer_type applied.
+      tvm::Array<tvm::Tensor> op_output_tinfos =
+        GetTensorInfo(idx_graph, idx_graph[nid].inputs[i].node_id, shape_vec, dtype_vec);
+      tensor_infos.push_back(op_output_tinfos[input.index]);
     }
+    // callback registered function to get a new operator.
+    auto op = fn_prepack(n->attrs, op_inputs, tensor_infos);
+    std::for_each(op_inputs.begin(), op_inputs.end(), [](const Symbol* s){ delete s; });
+    *ret = op.outputs;
+    return true;
+  };
 
-    CHECK(node_indexes.count(n.get())) << "Missing node in IndexedGraph.";
-    uint32_t nid = node_indexes[n.get()];
-    for (uint32_t i = 0; i < n->num_outputs(); ++i) {
-      tvm::Array<tvm::Expr> shape;
-      for (int64_t x : shape_vec[idx_graph.entry_id(nid, i)]) {
-        CHECK_LE(x, static_cast<int64_t>(std::numeric_limits<int>::max()));
-        shape.push_back(tvm::make_const(tvm::Int(32), x));
-      }
-
-      auto it = tinfos.find(n.get());
-      CHECK(it != tinfos.end());
-      tvm::Array<tvm::Tensor>& vec = it->second;
-      vec.push_back(tvm::placeholder(shape, GetTVMType(dtype_vec[idx_graph.entry_id(nid, i)])));
-    }
-
-    if (!n->is_variable()) {
-      // compose for replaced symbol
-      for (uint32_t i = 0; i < n->num_inputs(); ++i) {
-        auto& input = n->inputs[i];
-        if (replace_symbol.count(input.node.get())) {
-          auto& replaced_sym = replace_symbol[input.node.get()];
-          CHECK_EQ(replaced_sym.outputs.size(), 1) << "Pre-pack only support operators have one output.";
-          input.node->inputs.clear();
-          n->inputs[i] = replaced_sym.outputs[0];
-        }
-      }
-
-      nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
-      if (fn_prepack != nullptr) {
-        CHECK_EQ(n->num_outputs(), 1) << "Pre-pack only support operators have one output.";
-
-        std::vector<const Symbol*> input_syms;
-        std::unordered_set<const Node*> visited;
-        tvm::Array<tvm::Tensor> input_shapes;
-
-        for (auto &input : n->inputs) {
-          auto *input_sym = new Symbol();
-          input_sym->outputs.push_back(input);
-          input_syms.push_back(static_cast<const Symbol*>(input_sym));
-
-          if (visited.count(input.node.get())) continue;
-          visited.insert(input.node.get());
-          auto &placeholders = tinfos[input.node.get()];
-          for (auto &ph : placeholders) {
-            input_shapes.push_back(ph);
-          }
-        }
-
-        auto s = fn_prepack(n->attrs, input_syms, input_shapes);
-        replace_symbol[n.get()] = s;
-
-        for (auto iter = input_syms.begin(); iter != input_syms.end(); ++iter) {
-          delete *iter;
-        }
-      }
-    }
-    /*
-    uint32_t idx = node_indexes.count(n.get()) ? node_indexes[n.get()] : 100000;
-    fprintf(stderr, "Visit node [%s](index = %d) with %d inputs, %d outputs, %d deps.\n",
-            op_name.c_str(), idx,
-            n->num_inputs(), n->num_outputs(), n->control_deps.size());
-            */
-  });
-
-  Graph ret;
-  ret.outputs = src.outputs;
-  return ret;
+  return nnvm::compiler::GraphTransform(src, transform);
 }
 
 // register pass
@@ -144,4 +108,3 @@ NNVM_REGISTER_PASS(PrePack)
 }  // namespace
 }  // namespace pass
 }  // namespace nnvm
-
