@@ -91,17 +91,20 @@ NNVM_REGISTER_OP(max_pool2d)
     auto strides = ShapeToArray(param.strides);
     auto padding = ShapeToArray(param.padding);
     auto ceil_mode = param.ceil_mode;
-    CHECK(param.layout == kNCHW || param.layout == kNCHWc)
+    CHECK(param.layout == kNCHW || param.layout == kNCHWc || param.layout == kNHWC)
       << "max_pool2d currently only supports NCHW or NCHWc layout";
     CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
       << "max_pool2d currently only supports NCHW or NCHWc layout";
-    if (inputs[0].ndim() == 4) {
-      return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kMaxPool, ceil_mode)};
-    } else {
-      return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kMaxPool, ceil_mode, "NCHWc")};
+
+    std::string layout = "NCHW";
+    if (param.layout == kNCHWc) {
+      layout = "NCHWc";
+    } else if (param.layout == kNHWC) {
+      layout = "NHWC";
     }
+    return Array<Tensor>{
+      topi::nn::pool(inputs[0], pool_size, strides, padding,
+                     topi::nn::kMaxPool, ceil_mode, layout)};
 })
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
@@ -160,17 +163,21 @@ NNVM_REGISTER_OP(avg_pool2d)
     auto padding = ShapeToArray(param.padding);
     auto ceil_mode = param.ceil_mode;
 
-    CHECK(param.layout == kNCHW || param.layout == kNCHWc)
-      << "max_pool2d currently only supports NCHW or NCHWc layout";
+    CHECK(param.layout == kNCHW || param.layout == kNCHWc || param.layout == kNHWC)
+      << "max_pool2d currently only supports NCHW, NHWC or NCHWc layout";
     CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
-      << "max_pool2d currently only supports NCHW or NCHWc layout";
-    if (inputs[0].ndim() == 4) {
-      return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kAvgPool, ceil_mode)};
-    } else {
-      return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, topi::nn::kAvgPool, ceil_mode, "NCHWc")};
+      << "max_pool2d currently only supports NCHW, NHWC or NCHWc layout";
+
+    std::string layout = "NCHW";
+    if (param.layout == kNCHWc) {
+      layout = "NCHWc";
+    } else if (param.layout == kNHWC) {
+      layout = "NHWC";
     }
+    return Array<Tensor>{
+      topi::nn::pool(inputs[0], pool_size, strides, padding,
+                     topi::nn::kAvgPool, ceil_mode, layout)};
+
 })
 .set_num_outputs(1)
 .set_num_inputs(1)
