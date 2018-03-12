@@ -59,10 +59,10 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                  param.kernel_size[0],
                  param.kernel_size[1]});
 
-//  wshape = ConvertLayout(wshape, kNCHW, param.layout);
-//  wshape[0] *= param.groups;
-//
-//  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
+  wshape = ConvertLayout(wshape, kNCHW, param.layout);
+  wshape[0] *= param.groups;
+
+  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
   if (param.use_bias) {
     NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape,
                             Conv2DParam::kBias, TShape({param.channels}));
@@ -205,8 +205,9 @@ struct Conv2DNoPackParam : public dmlc::Parameter<Conv2DNoPackParam> {
     DMLC_DECLARE_FIELD(layout)
     .add_enum("NCHW", kNCHW)
     .add_enum("NHWC", kNHWC)
-    .add_enum("NCHWc", kNCHWc)
-    .set_default(kNCHWc)
+    .add_enum("NCHW8c", kNCHW8c)
+    .add_enum("NCHW16c", kNCHW16c)
+    .set_default(kNCHW16c)
     .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
               "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
               "dimensions respectively. Convolution is applied on the 'H' and"

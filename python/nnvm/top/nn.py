@@ -142,7 +142,7 @@ def compute_conv2d_nopack(attrs, inputs, _):
     groups = attrs.get_int("groups")
     channels = attrs.get_int("channels")
     layout = attrs["layout"]
-    assert layout == "NCHWc", "only support nChwc for now"
+    assert layout == "NCHW16c" or layout == "NCHW8c", "only support nChw16c or nChw8c for now"
     assert dilation == (1, 1), "not support dilate now"
     if groups == 1:
         out = topi.nn.conv2d_nopack(inputs[0], inputs[1], (channels, kh, kw), strides, padding)

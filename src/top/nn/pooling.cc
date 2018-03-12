@@ -91,14 +91,16 @@ NNVM_REGISTER_OP(max_pool2d)
     auto strides = ShapeToArray(param.strides);
     auto padding = ShapeToArray(param.padding);
     auto ceil_mode = param.ceil_mode;
-    CHECK(param.layout == kNCHW || param.layout == kNCHWc || param.layout == kNHWC)
+    CHECK(param.layout == kNCHW || param.layout == kNCHW8c || param.layout == kNCHW16c || param.layout == kNHWC)
       << "max_pool2d currently only supports NCHW or NCHWc layout";
     CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
       << "max_pool2d currently only supports NCHW or NCHWc layout";
 
     std::string layout = "NCHW";
-    if (param.layout == kNCHWc) {
-      layout = "NCHWc";
+    if (param.layout == kNCHW8c) {
+      layout = "NCHW8c";
+    } else if (param.layout == kNCHW16c) {
+      layout = "NCHW16c";
     } else if (param.layout == kNHWC) {
       layout = "NHWC";
     }
@@ -163,14 +165,16 @@ NNVM_REGISTER_OP(avg_pool2d)
     auto padding = ShapeToArray(param.padding);
     auto ceil_mode = param.ceil_mode;
 
-    CHECK(param.layout == kNCHW || param.layout == kNCHWc || param.layout == kNHWC)
+    CHECK(param.layout == kNCHW || param.layout == kNCHW8c || param.layout == kNCHW16c || param.layout == kNHWC)
       << "max_pool2d currently only supports NCHW, NHWC or NCHWc layout";
     CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
       << "max_pool2d currently only supports NCHW, NHWC or NCHWc layout";
 
     std::string layout = "NCHW";
-    if (param.layout == kNCHWc) {
-      layout = "NCHWc";
+    if (param.layout == kNCHW8c) {
+      layout = "NCHW8c";
+    } else if (param.layout == kNCHW16c) {
+      layout = "NCHW16c";
     } else if (param.layout == kNHWC) {
       layout = "NHWC";
     }

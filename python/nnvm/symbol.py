@@ -14,6 +14,7 @@ from . import _base
 from ._base import _LIB, check_call as _check_call, _FFI_MODE
 from .attribute import AttrScope
 from . import _symbol_internal as _internal
+from . import contrib
 
 # Use different verison of SymbolBase
 # When possible, use cython to speedup part of computation.
