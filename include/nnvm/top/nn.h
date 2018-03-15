@@ -299,7 +299,6 @@ struct MultiBoxPriorParam : public dmlc::Parameter<MultiBoxPriorParam> {
 struct MultiBoxDetectionParam : public dmlc::Parameter<MultiBoxDetectionParam> {
   bool clip;
   float threshold;
-  int background_id;
   float nms_threshold;
   bool force_suppress;
   int nms_topk;
