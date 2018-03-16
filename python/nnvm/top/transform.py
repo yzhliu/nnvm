@@ -18,14 +18,6 @@ reg.register_schedule("transpose", _fschedule_injective)
 reg.register_pattern("reshape", OpPattern.INJECTIVE)
 reg.register_schedule("reshape", _fschedule_injective)
 
-# reorder
-reg.register_pattern("reorder", OpPattern.INJECTIVE)
-reg.register_schedule("reorder", _fschedule_injective)
-reg.register_pattern("bn_reorder", OpPattern.INJECTIVE)
-reg.register_schedule("bn_reorder", _fschedule_injective)
-reg.register_pattern("data_reorder_back", OpPattern.INJECTIVE)
-reg.register_schedule("data_reorder_back", _fschedule_injective)
-
 # squeeze
 reg.register_pattern("squeeze", OpPattern.INJECTIVE)
 reg.register_schedule("squeeze", _fschedule_injective)
@@ -39,5 +31,5 @@ reg.register_pattern("split", OpPattern.INJECTIVE)
 reg.register_schedule("split", _fschedule_injective)
 
 # layout transform
-# reg.register_pattern("__layout_transform__", OpPattern.INJECTIVE)
+reg.register_pattern("__layout_transform__", OpPattern.INJECTIVE)
 reg.register_schedule("__layout_transform__", _fschedule_injective)
