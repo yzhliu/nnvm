@@ -3,6 +3,7 @@
  * \file nn.cc
  * \brief Property def of nn operators.
  */
+#include <tvm/tvm.h>
 #include <tvm/expr.h>
 #include <tvm/packed_func_ext.h>
 #include <nnvm/op.h>
@@ -20,9 +21,12 @@
 namespace nnvm {
 namespace top {
 
+using tvm::Var;
+using tvm::Expr;
 using tvm::Tensor;
 using tvm::Array;
 using nnvm::compiler::FTVMCompute;
+using nnvm::compiler::FTVMLayoutRequest;
 
 // dense
 DMLC_REGISTER_PARAMETER(DenseParam);
@@ -82,6 +86,7 @@ If ``use_bias`` is set to be false, then the ``bias`` term is ignored.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<DenseParam>)
 .set_attr<FInferShape>("FInferShape", DenseInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, -1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -174,6 +179,7 @@ NNVM_REGISTER_OP(dropout)
 .set_num_outputs(2)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 2>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 2>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, -1>)
 .set_attr<FNumVisibleOutputs>("FNumVisibleOutputs", [](const NodeAttrs& attrs) {
     return 1;
   })
@@ -256,6 +262,7 @@ axis to be the last item in the input shape.
 .add_arguments(BatchNormParam::__FIELDS__())
 .set_attr_parser(ParamParser<BatchNormParam>)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<BatchNormParam>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, -1>)
 .set_num_inputs(5)
 .set_num_outputs(3)
 .set_attr<FInferShape>("FInferShape", BatchNormInferShape)
@@ -293,6 +300,7 @@ NNVM_REGISTER_OP(softmax)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<-1, -1>)
 .set_support_level(1)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
@@ -350,6 +358,7 @@ NNVM_REGISTER_OP(log_softmax)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<-1, -1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -409,6 +418,7 @@ NNVM_REGISTER_OP(leaky_relu)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<-1, -1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -472,6 +482,7 @@ NNVM_REGISTER_OP(pad)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", PadInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -490,6 +501,215 @@ NNVM_REGISTER_OP(pad)
       pad_after.push_back(tvm::make_const(tvm::Int(32), pad_width[i][1]));
     }
     return Array<Tensor>{ topi::pad(inputs[0], pad_before, pad_after, param.pad_value) };
+})
+.set_support_level(1);
+
+// layout transformer
+DMLC_REGISTER_PARAMETER(LayoutTransformParam);
+
+inline bool LayoutTransformInferShape(const NodeAttrs& attrs,
+                                      std::vector<TShape>* in_attrs,
+                                      std::vector<TShape>* out_attrs) {
+  CHECK_EQ(in_attrs->size(), 1U) << "Input: [data]";
+  CHECK_EQ(out_attrs->size(), 1U);
+  const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
+  const TShape &dshape = (*in_attrs)[0];
+  if (dshape.ndim() == 0) return false;
+  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_attrs, 0,
+                           ConvertLayout(dshape, param.src_layout, param.dst_layout));
+  return true;
+}
+
+NNVM_REGISTER_OP(__layout_transform__)
+.describe(R"code(Flattens the input into a 2-D array.
+
+For an input array with shape ``(d1, d2, ..., dk)``, `flatten` operation reshapes
+the input array into an output array of shape ``(d1, d2*...*dk)``.
+
+)code" NNVM_ADD_FILELINE)
+.set_num_inputs(1)
+.set_num_outputs(1)
+.add_argument("data", "Tensor", "Input data.")
+.add_arguments(LayoutTransformParam::__FIELDS__())
+.set_attr_parser(ParamParser<LayoutTransformParam>)
+.set_attr<FInferShape>("FInferShape", LayoutTransformInferShape)
+.set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>(
+  "FTVMLayoutRequest", [](const NodeAttrs& attrs,
+                          std::vector<TLayoutInfo> *ilayouts,
+                          std::vector<TLayoutInfo> *olayouts) {
+    const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
+    CHECK_EQ(ilayouts->size(), 1U);
+    CHECK_EQ(olayouts->size(), 1U);
+    ilayouts->at(0) = LayoutFlagStr(param.src_layout);
+    olayouts->at(0) = LayoutFlagStr(param.dst_layout);
+    return true;
+})
+.set_attr<FTVMCompute>(
+"FTVMCompute", [](const NodeAttrs& attrs,
+                  const Array<Tensor>& inputs,
+                  const Array<Tensor>& outputs) {
+  const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
+
+  if (param.src_layout == param.dst_layout) return Array<Tensor>{ inputs[0] };
+  else if (param.src_layout == kUndef || param.dst_layout == kUndef) {
+    LOG(FATAL) << "cannot convert from/to undefined layout";
+  }
+
+  auto src_ndim = inputs[0].ndim();
+  if (src_ndim == 3) {
+    if ((param.src_layout == kNCW && param.dst_layout == kNWC) ||
+        (param.src_layout == kNWC && param.dst_layout == kNCW)) {
+      return Array<Tensor> {
+      topi::layout_transform(inputs[0], outputs[0]->shape,
+                             [&](const Array<Var>& dst_indices){
+                               return Array<Expr>{ dst_indices[0],
+                                                   dst_indices[2],
+                                                   dst_indices[1] };
+                             })};
+    }
+  } else if (src_ndim == 4) {
+    switch (param.src_layout) {
+      case kNCHW: {
+        switch (param.dst_layout) {
+          case kNHWC: {
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var> &dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         dst_indices[3],
+                                                         dst_indices[1],
+                                                         dst_indices[2] };
+                                   })};
+          }
+          case kNCHW3c:
+          case kNCHW8c:
+          case kNCHW16c: {
+            Expr block = (param.dst_layout == kNCHW3c) ? Expr(3) :
+                         ((param.dst_layout == kNCHW8c) ? Expr(8) : Expr(16));
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var> &dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         dst_indices[1]*block + dst_indices[4],
+                                                         dst_indices[2],
+                                                         dst_indices[3] };
+                                   })};
+          }
+          default: break;
+        }
+      }  // param.src_layout == kNCHW
+      case kNHWC: {
+        switch (param.dst_layout) {
+          case kNCHW: {
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var> &dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         dst_indices[2],
+                                                         dst_indices[3],
+                                                         dst_indices[1] };
+                                   })};
+          }
+          case kNCHW3c:
+          case kNCHW8c:
+          case kNCHW16c: {
+            Expr block = (param.dst_layout == kNCHW3c) ? Expr(3) :
+                         ((param.dst_layout == kNCHW8c) ? Expr(8) : Expr(16));
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var>& dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         dst_indices[2],
+                                                         dst_indices[3],
+                                                         dst_indices[1]*block + dst_indices[4] };
+                                   })};
+          }
+          default: break;
+        }
+      }  // param.src_layout == kNHWC
+      default: break;
+    }
+  } else if (src_ndim == 5) {
+    switch (param.src_layout) {
+      case kNCHW3c:
+      case kNCHW8c:
+      case kNCHW16c: {
+        Expr src_block = (param.src_layout == kNCHW3c) ? Expr(3) :
+                         ((param.src_layout == kNCHW8c) ? Expr(8) : Expr(16));
+        switch (param.dst_layout) {
+          case kNCHW: {
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var>& dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         dst_indices[1] / src_block,
+                                                         dst_indices[2],
+                                                         dst_indices[3],
+                                                         dst_indices[1] % src_block };
+                                   })};
+          }
+          case kNHWC: {
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var>& dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         dst_indices[3] / src_block,
+                                                         dst_indices[1],
+                                                         dst_indices[2],
+                                                         dst_indices[3] % src_block };
+                                   })};
+          }
+          case kNCHW3c:
+          case kNCHW8c:
+          case kNCHW16c: {
+            Expr dst_block = (param.src_layout == kNCHW3c) ? Expr(3) :
+                             ((param.src_layout == kNCHW8c) ? Expr(8) : Expr(16));
+            return Array<Tensor> {
+            topi::layout_transform(inputs[0], outputs[0]->shape,
+                                   [&](const Array<Var>& dst_indices) {
+                                     return Array<Expr>{ dst_indices[0],
+                                                         (dst_indices[1]*dst_block + dst_indices[4]) / src_block,
+                                                         dst_indices[2],
+                                                         dst_indices[3],
+                                                         (dst_indices[1]*dst_block + dst_indices[4]) % src_block };
+                                   })};
+          }
+          default: break;
+        }
+      }
+      case kNCDHW: {
+        if (param.dst_layout == kNDHWC) {
+          return Array<Tensor> {
+          topi::layout_transform(inputs[0], outputs[0]->shape,
+                                 [&](const Array<Var>& dst_indices) {
+                                   return Array<Expr>{ dst_indices[0],
+                                                       dst_indices[4],
+                                                       dst_indices[1],
+                                                       dst_indices[2],
+                                                       dst_indices[3] };
+                                 })};
+        }
+        break;
+      }
+      case kNDHWC: {
+        if (param.dst_layout == kNCDHW) {
+          return Array<Tensor> {
+          topi::layout_transform(inputs[0], outputs[0]->shape,
+                                 [&](const Array<Var> &dst_indices) {
+                                   return Array<Expr>{dst_indices[0],
+                                                      dst_indices[2],
+                                                      dst_indices[3],
+                                                      dst_indices[4],
+                                                      dst_indices[1]};
+                                 })};
+        }
+        break;
+      }
+      default: break;
+    }
+  }
+  LOG(FATAL) << "cannot convert from " << param.src_layout << " to " << param.dst_layout;
 })
 .set_support_level(1);
 

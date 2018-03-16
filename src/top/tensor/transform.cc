@@ -63,6 +63,7 @@ Example::
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", FlattenInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .add_argument("data", "Tensor", "Input data.")
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
@@ -156,6 +157,7 @@ Example::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ConcatenateParam>)
 .set_attr<FInferShape>("FInferShape", ConcatenateInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -173,12 +175,12 @@ DMLC_REGISTER_PARAMETER(ExpandDimsParam);
 inline bool ExpandDimsInferShape(const NodeAttrs& attrs,
                                  std::vector<TShape>* in_shape,
                                  std::vector<TShape>* out_shape) {
-  fprintf(stderr, "start ExpandDimsInferShape\n");
   const ExpandDimsParam& param = nnvm::get<ExpandDimsParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   const TShape& dshape = in_shape->at(0);
   int ndim = static_cast<int>(dshape.ndim());
-  CHECK(param.axis >= -ndim - 1 && param.axis <= ndim);
+  CHECK(param.axis >= -ndim - 1 && param.axis <= ndim)
+    << "axis = " << param.axis << " ndim = " << ndim;
   int axis = param.axis < 0 ? ndim + param.axis + 1 : param.axis;
   std::vector<dim_t> oshape;
   for (int i = 0; i < axis; ++i) {
@@ -192,7 +194,6 @@ inline bool ExpandDimsInferShape(const NodeAttrs& attrs,
   }
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0,
                            TShape(oshape.begin(), oshape.end()));
-  fprintf(stderr, "end ExpandDimsInferShape\n");
   return true;
 }
 
@@ -209,6 +210,7 @@ will return a new array with shape ``(2,1,1,1,1,1,3,4)``.
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ExpandDimsParam>)
 .set_attr<FInferShape>("FInferShape", ExpandDimsInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<FTVMCompute>(
@@ -256,6 +258,8 @@ Examples::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ReduceParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", AssignOutputAttr<TShape, 1, 0>)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)
+// never transform layout of the second input array.
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_num_inputs(2)
 .set_num_outputs(1)
 .set_attr<FGradient>(
@@ -352,6 +356,7 @@ along which to split the array.
 .set_attr_parser(SplitParamParser)
 .set_attr<FInferShape>("FInferShape", SplitInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, -1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, -1>)
 .set_num_inputs(1)
 .set_num_outputs(SplitNumOutputs)
 .set_attr<FTVMCompute>(
@@ -394,6 +399,7 @@ NNVM_REGISTER_OP(cast)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<CastParam>)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", CastInferType)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_support_level(1);
@@ -546,6 +552,7 @@ The significance of each is explained below:
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ReshapeParam>)
 .set_attr<FInferShape>("FInferShape", ReshapeInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<FTVMCompute>(
@@ -588,6 +595,8 @@ the input array into an output array with the same shape as the second input arr
     return true;
 })
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+// never transform layout of the second input array.
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
                   const std::vector<NodeEntry>& ograds) {
@@ -668,6 +677,7 @@ Examples::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<SqueezeParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", SqueezeShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<FTVMCompute>(
@@ -687,7 +697,7 @@ Examples::
 })
 .set_support_level(1);
 
-// tranpose
+// transpose
 DMLC_REGISTER_PARAMETER(TransposeParam);
 
 inline bool TransposeShape(const nnvm::NodeAttrs& attrs,
@@ -750,6 +760,7 @@ Examples::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<TransposeParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", TransposeShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_support_level(4)

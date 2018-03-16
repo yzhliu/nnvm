@@ -42,8 +42,15 @@ inline std::vector<std::string> UseBiasListInputNames(const NodeAttrs& attrs) {
  */
 inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
   if (src_layout == dst_layout) return src;
-  TShape dst = src;
+  else if (src_layout == kUndef) {
+    LOG(FATAL) << "cannot convert undefined layout to " << LayoutFlagStr(dst_layout);
+  } else if (dst_layout == kUndef) {
+    LOG(FATAL) << "cannot convert " << LayoutFlagStr(src_layout) << " to undefined layout";
+  }
+
+  TShape dst;
   if (src.ndim() == 3) {
+    dst = src;
     switch (src_layout) {
       case kNCW: break;
       case kNWC: {
@@ -51,7 +58,7 @@ inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
         break;
       }
       default: {
-        LOG(FATAL) << "inavlid layout for 3d shape" << src_layout;
+        LOG(FATAL) << "invalid layout for 3d shape " << LayoutFlagStr(src_layout);
       }
     }
     switch (dst_layout) {
@@ -61,20 +68,29 @@ inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
         break;
       }
       default: {
-        LOG(FATAL) << "inavlid layout for 3d shape" << dst_layout;
+        LOG(FATAL) << "invalid layout for 3d shape " << LayoutFlagStr(dst_layout);
       }
     }
   } else if (src.ndim() == 4) {
+    int ndim = (dst_layout == kNCHW3c || dst_layout == kNCHW16c || dst_layout == kNCHW8c) ? 5 : 4;
+    dst = TShape(ndim);
     switch (src_layout) {
-      case kNCHW: break;
+      case kNCHW: {
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+        dst[3] = src[3];
+        break;
+      }
       case kNHWC: {
+        dst[0] = src[0];
         dst[2] = src[1];
         dst[3] = src[2];
         dst[1] = src[3];
         break;
       }
       default: {
-        LOG(FATAL) << "inavlid layout for 4d shape" << src_layout;
+        LOG(FATAL) << "invalid layout for 4d shape " << LayoutFlagStr(src_layout);
       }
     }
     src = dst;
@@ -86,36 +102,87 @@ inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
         dst[3] = src[1];
         break;
       }
+      case kNCHW3c: {
+        dst[1] = dst[1] / 3;
+        dst[4] = 3;
+        break;
+      }
+      case kNCHW8c: {
+        dst[1] = dst[1] / 8;
+        dst[4] = 8;
+        break;
+      }
+      case kNCHW16c: {
+        dst[1] = dst[1] / 16;
+        dst[4] = 16;
+        break;
+      }
       default: {
-        LOG(FATAL) << "inavlid layout for 4d shape" << dst_layout;
+        LOG(FATAL) << "invalid layout for 4d shape " << LayoutFlagStr(dst_layout);
       }
     }
   } else if (src.ndim() == 5) {
-    switch (src_layout) {
-      case kNCDHW: break;
-      case kNDHWC: {
-        dst[2] = src[1];
-        dst[3] = src[2];
-        dst[4] = src[3];
-        dst[1] = src[4];
-        break;
+    if (src_layout == kNCHW16c || src_layout == kNCHW8c) {
+      int ndim = (dst_layout == kNCHW16c || dst_layout == kNCHW8c) ? 5 : 4;
+      dst = TShape(ndim);
+      dst[0] = src[0];
+      dst[1] = src[1] * src[4];
+      dst[2] = src[2];
+      dst[3] = src[3];
+      switch (dst_layout) {
+        case kNCHW: break;
+        case kNHWC: {
+          std::swap(dst[1], dst[3]);
+          std::swap(dst[1], dst[2]);
+          break;
+        }
+        case kNCHW3c: {
+          dst[1] = dst[1] / 3;
+          dst[4] = 3;
+          break;
+        }
+        case kNCHW8c: {
+          dst[1] = dst[1] / 8;
+          dst[4] = 8;
+          break;
+        }
+        case kNCHW16c: {
+          dst[1] = dst[1] / 16;
+          dst[4] = 16;
+          break;
+        }
+        default: {
+          LOG(FATAL) << "invalid layout for 5d shape " << LayoutFlagStr(dst_layout);
+        }
       }
-      default: {
-        LOG(FATAL) << "inavlid layout for 5d shape" << src_layout;
+    } else {
+      dst = src;
+      switch (src_layout) {
+        case kNCDHW: break;
+        case kNDHWC: {
+          dst[2] = src[1];
+          dst[3] = src[2];
+          dst[4] = src[3];
+          dst[1] = src[4];
+          break;
+        }
+        default: {
+          LOG(FATAL) << "invalid layout for 5d shape " << LayoutFlagStr(src_layout);
+        }
       }
-    }
-    src = dst;
-    switch (dst_layout) {
-      case kNCDHW: break;
-      case kNDHWC: {
-        dst[1] = src[2];
-        dst[2] = src[3];
-        dst[3] = src[4];
-        dst[4] = src[1];
-        break;
-      }
-      default: {
-        LOG(FATAL) << "inavlid layout for 5d shape" << dst_layout;
+      src = dst;
+      switch (dst_layout) {
+        case kNCDHW: break;
+        case kNDHWC: {
+          dst[1] = src[2];
+          dst[2] = src[3];
+          dst[3] = src[4];
+          dst[4] = src[1];
+          break;
+        }
+        default: {
+          LOG(FATAL) << "invalid layout for 5d shape " << LayoutFlagStr(dst_layout);
+        }
       }
     }
   } else {

@@ -67,6 +67,7 @@ NNVM_REGISTER_OP(matmul)
 .add_argument("rhs", "NDArray-or-Symbol", "The second input")
 .set_attr<FInferShape>("FInferShape", DotShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<2, 1>)
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
                   const std::vector<NodeEntry>& ograds) {

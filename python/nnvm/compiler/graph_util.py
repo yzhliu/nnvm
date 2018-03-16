@@ -66,6 +66,38 @@ def infer_dtype(graph, **dtype):
     return input_dtype, output_dtype
 
 
+def infer_layout(graph, **layout):
+    """Infer the layout given the layoutS of inputs.
+    It will fix the layout automatically by insert __layout_transform__ node.
+
+    Parameters
+    ----------
+    graph : Graph
+        The graph to perform type inference from
+
+    layout : dict of str to str
+        The specific input data layout.
+
+    Returns
+    -------
+    graph : Graph
+        The graph with layout fixed
+
+    in_layout: list of str
+        Layout of inputs
+
+    out_layout: list of str
+        Layout of outputs
+    """
+    graph = graph_attr.set_layout_inputs(graph, layout)
+    graph = graph.apply("LayoutTransform")
+    layout = graph.json_attr("layout")
+    index = graph.index
+    input_layout = [layout[index.entry_id(x)] for x in index.input_names]
+    output_layout = [layout[index.entry_id(x)] for x in index.output_entries]
+    return graph, input_layout, output_layout
+
+
 _deep_compare = tvm.get_global_func("nnvm.graph.DeepCompare")
 
 def check_graph_equal(grapha, graphb, compare_variable_attrs=False):

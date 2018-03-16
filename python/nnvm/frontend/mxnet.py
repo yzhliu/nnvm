@@ -46,7 +46,6 @@ def _pooling(inputs, attrs):
     if len(kernel) != 2:
         _raise_not_supported('non-2d kernel', 'pool_2d')
     global_pool = 'global' if _parse_bool_str(attrs, 'global_pool') else ''
-    print('global_pool = ' + global_pool)
     pool_type = _required_attr(attrs, 'pool_type')
     if pool_type not in ['avg', 'max']:
         _raise_not_supported('non-avg/max', 'pool2d')

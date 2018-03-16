@@ -13,6 +13,7 @@ namespace nnvm {
 namespace compiler {
 
 /*! \brief Parameters of layout transform operator */
+/*
 struct LayoutTransformParam : public dmlc::Parameter<LayoutTransformParam> {
   std::string src_layout;
   std::string dst_layout;
@@ -22,6 +23,7 @@ struct LayoutTransformParam : public dmlc::Parameter<LayoutTransformParam> {
     DMLC_DECLARE_FIELD(dst_layout);
   }
 };
+ */
 }  // namespace compiler
 }  // namespace nnvm
 

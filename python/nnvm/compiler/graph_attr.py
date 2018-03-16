@@ -96,11 +96,14 @@ def set_layout_inputs(g, layout):
     Returns
     -------
     g : Graph
-        The updated graph with updated dtype.
+        The updated graph with updated layout.
     """
-    list_shape = [
-        layout.get(name, "default") for name in g.index.input_names]
-    g._set_json_attr("layout_inputs", list_shape, 'list_str')
+    if isinstance(layout, dict):
+        list_layout = [
+            layout.get(name, "__undef__") for name in g.index.input_names]
+    else:
+        list_layout = [layout] * len(g.index.input_names)
+    g._set_json_attr("layout_inputs", list_layout, 'list_str')
     return g
 
 _move_out_module = tvm.get_global_func("nnvm.graph._move_module")

@@ -31,6 +31,21 @@ inline bool UpSamplingInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+inline bool UpsamplingLayout(const NodeAttrs& attrs,
+                             std::vector<TLayoutInfo> *in_layouts,
+                             std::vector<TLayoutInfo> *out_layouts) {
+  CHECK_EQ(in_layouts->size(), 1U);
+  CHECK_EQ(out_layouts->size(), 1U);
+  if (in_layouts->at(0) != "__undef__") {
+    // only support NCHW for now.
+    in_layouts->at(0) = "NCHW";
+    out_layouts->at(0) = "NCHW";
+  } else if (out_layouts->at(0) != "__undef__") {
+    return false;
+  }
+  return true;
+}
+
 NNVM_REGISTER_OP(upsampling)
 .describe(R"(Perform nearest neighbor upsampling to input array.
 
@@ -44,6 +59,7 @@ NNVM_REGISTER_OP(upsampling)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<UpSamplingParam>)
 .set_attr<FInferShape>("FInferShape", UpSamplingInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", UpsamplingLayout)
 .set_num_outputs(1)
 .set_num_inputs(1)
 .set_support_level(2);

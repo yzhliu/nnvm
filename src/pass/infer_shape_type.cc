@@ -79,6 +79,7 @@ Graph InferAttr(Graph &&ret,
     const uint32_t num_inputs = inode.inputs.size();
     const uint32_t num_outputs = inode.source->num_outputs();
     if (inode.source->is_variable()) {
+      fprintf(stderr, "Infer Var %s\n", inode.source->attrs.name.c_str());
       // Variable node. No operator. Only one output entry.
       CHECK(inode.source->op() == nullptr);
       CHECK_EQ(num_outputs, 1U);
@@ -91,6 +92,7 @@ Graph InferAttr(Graph &&ret,
         }
       }
     } else if (is_backward.get(inode.source->op(), false) && inode.control_deps.size()) {
+      fprintf(stderr, "Infer Op[%s] %s \n", inode.source->op()->name.c_str(), inode.source->attrs.name.c_str());
       CHECK_GE(inode.control_deps.size(), 1U)
         << "BackwardOp need to have control_deps to its forward op";
       const IndexedGraph::Node& fnode = idx[inode.control_deps[0]];
@@ -146,7 +148,6 @@ Graph InferAttr(Graph &&ret,
         oshape[i] = rshape[idx.entry_id(nid, i)];
         if (fis_none(oshape[i])) forward_known = false;
       }
-//      fprintf(stderr, "Infer: %s\n", inode.source->op()->name.c_str());
       auto finfer = finfer_shape.get(inode.source->op(), fdefault);
       if (!forward_known) {
         if (finfer != nullptr) {

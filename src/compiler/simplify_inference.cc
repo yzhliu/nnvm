@@ -61,17 +61,16 @@ BatchNormToInferUnpack(const nnvm::NodeAttrs& attrs,
         "elemwise_add", bn_name + "_add_beta", {shift, beta});
   }
   int axis = param.axis;
-  if (dshape.ndim() == 5) {
-    const auto bn = dshape[4];
-    std::unordered_map<std::string, std::string> kwargs{{"bn", std::to_string(bn)}};
-    scale = MakeNode("bn_reorder", scale.node->attrs.name + "_bnreorder", {scale}, kwargs);
-    scale = ExpandBiasToMatchAxis(scale, dshape.ndim()-1, 1, axis);
-    shift = MakeNode("bn_reorder", shift.node->attrs.name + "_bnreorder", {shift}, kwargs);
-    shift = ExpandBiasToMatchAxis(shift, dshape.ndim()-1, 1, axis);
-  } else {
-    scale = ExpandBiasToMatchAxis(scale, dshape.ndim(), 1, axis);
-    shift = ExpandBiasToMatchAxis(shift, dshape.ndim(), 1, axis);
-  }
+  scale = ExpandBiasToMatchAxis(scale, dshape.ndim(), 1, axis);
+  shift = ExpandBiasToMatchAxis(shift, dshape.ndim(), 1, axis);
+
+  // expand the first axis as well.
+  // make it agree with the layout, which is required by layout transform.
+  scale = MakeNode("expand_dims", scale.node->attrs.name + "_expand_0axis",
+                   {scale}, {{"axis", "0"}, {"num_newaxis", std::to_string(axis)}});
+  shift = MakeNode("expand_dims", shift.node->attrs.name + "_expand_0axis",
+                   {shift}, {{"axis", "0"}, {"num_newaxis", std::to_string(axis)}});
+
   NodeEntry out = MakeNode("broadcast_mul", bn_name + "_a_mul_data",
                            {data, scale});
   out = MakeNode("broadcast_add", bn_name + "_out",
@@ -155,7 +154,6 @@ Graph SimplifyInference(nnvm::Graph src) {
     if (n->is_variable()) return false;
     static const Op* bn_op = Op::Get("batch_norm");
     static const Op* dropout_op = Op::Get("dropout");
-    static const Op* bn_inference_nChwc_op = Op::Get("_contrib_batch_norm_inference_nChwc");
     if (n->op() == bn_op) {
       *ret = BatchNormToInferUnpack(
           n->attrs,
@@ -169,16 +167,6 @@ Graph SimplifyInference(nnvm::Graph src) {
     } else if (n->op() == dropout_op) {
       NodeEntry undef = MakeNode("__undef__", "undef", {});
       *ret = {n->inputs[0], undef};
-      return true;
-    } else if (n->op() == bn_inference_nChwc_op) {
-      *ret = BatchNormToInferNCHWcUnpack(
-          n->attrs,
-          n->inputs[0],
-          n->inputs[1],
-          n->inputs[2],
-          n->inputs[3],
-          n->inputs[4],
-          shape_vec[idx.entry_id(nid, 0)]);
       return true;
     } else {
       return false;

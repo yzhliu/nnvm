@@ -11,7 +11,6 @@
 #include <tvm/packed_func_ext.h>
 #include <nnvm/compiler/op_attr_types.h>
 #include <tvm/tvm.h>
-#include <topi/transform.h>
 #include "./nn_common.h"
 #include "../op_common.h"
 #include "../elemwise_op_common.h"
@@ -21,6 +20,7 @@
 using tvm::Tensor;
 using tvm::Array;
 using nnvm::compiler::FTVMCompute;
+using nnvm::compiler::FTVMLayoutRequest;
 
 namespace nnvm {
 namespace top {
@@ -129,6 +129,28 @@ a bias vector is created and added to the outputs.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FTVMLayoutRequest>(
+  "FTVMLayoutRequest", [](const NodeAttrs& attrs,
+                          std::vector<TLayoutInfo> *ilayouts,
+                          std::vector<TLayoutInfo> *olayouts) {
+  const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
+  const TLayoutInfo& out_layout = LayoutFlagStr(param.layout);
+  if (param.use_bias) {
+    CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
+  } else {
+    CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
+  }
+  CHECK_EQ(olayouts->size(), 1U);
+  olayouts->at(0) = out_layout;
+  for (uint32_t i = 0; i < ilayouts->size(); ++i) {
+    if (ilayouts->at(i) != "__undef__" &&
+        !CheckLayoutConvertible(ilayouts->at(i), out_layout)) {
+      return false;
+    }
+    ilayouts->at(i) = out_layout;
+  }
+  return true;
+})
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DParam>)
 .set_support_level(2)
@@ -178,7 +200,6 @@ struct Conv2DNoPackParam : public dmlc::Parameter<Conv2DNoPackParam> {
   TShape padding;
   TShape dilation;
   int groups;
-  int layout;
   bool use_bias;
   int ic_bn;
   int oc_bn;
@@ -202,16 +223,6 @@ struct Conv2DNoPackParam : public dmlc::Parameter<Conv2DNoPackParam> {
               "At groups=2, the operation becomes equivalent to having two convolution"
               "layers side by side, each seeing half the input channels, and producing"
               "half the output channels, and both subsequently concatenated.");
-    DMLC_DECLARE_FIELD(layout)
-    .add_enum("NCHW", kNCHW)
-    .add_enum("NHWC", kNHWC)
-    .add_enum("NCHW8c", kNCHW8c)
-    .add_enum("NCHW16c", kNCHW16c)
-    .set_default(kNCHW16c)
-    .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
-              "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
-              "dimensions respectively. Convolution is applied on the 'H' and"
-              "'W' dimensions.");
     DMLC_DECLARE_FIELD(use_bias).set_default(true)
     .describe("Whether the layer uses a bias vector.");
     DMLC_DECLARE_FIELD(ic_bn).set_default(16)
@@ -307,6 +318,57 @@ NNVM_REGISTER_OP(conv2d_nopack)
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DNoPackParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DNoPackInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FTVMLayoutRequest>(
+"FTVMLayoutRequest", [](const NodeAttrs& attrs,
+                        std::vector<TLayoutInfo> *ilayouts,
+                        std::vector<TLayoutInfo> *olayouts) {
+  const Conv2DNoPackParam& param = nnvm::get<Conv2DNoPackParam>(attrs.parsed);
+  TLayoutInfo in_layout;
+  TLayoutInfo out_layout;
+  switch (param.ic_bn) {
+    case 3:
+      in_layout = "NCHW3c";
+      break;
+    case 8:
+      in_layout = "NCHW8c";
+      break;
+    case 16:
+    default:
+      in_layout = "NCHW16c";
+      break;
+  }
+  switch (param.oc_bn) {
+    case 3:
+      out_layout = "NCHW3c";
+      break;
+    case 8:
+      out_layout = "NCHW8c";
+      break;
+    case 16:
+    default:
+      out_layout = "NCHW16c";
+      break;
+  }
+
+  if (param.use_bias) {
+    CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
+    // TODO: decide arg layout
+    // TODO: now we assume arg layout is correctly converted.
+//    ilayouts->at(1) = in_layout;
+//    ilayouts->at(2) = in_layout;
+  } else {
+    CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
+    // TODO: decide arg layout
+    // TODO: now we assume arg layout is correctly converted.
+//    ilayouts->at(1) = in_layout;
+  }
+  ilayouts->at(0) = in_layout;
+
+  CHECK_EQ(olayouts->size(), 1U);
+  olayouts->at(0) = out_layout;
+
+  return true;
+})
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DNoPackParam>)
 .set_support_level(2);

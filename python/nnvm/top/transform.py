@@ -37,3 +37,7 @@ reg.register_schedule("concatenate", _fschedule_injective)
 # split
 reg.register_pattern("split", OpPattern.INJECTIVE)
 reg.register_schedule("split", _fschedule_injective)
+
+# layout transform
+# reg.register_pattern("__layout_transform__", OpPattern.INJECTIVE)
+reg.register_schedule("__layout_transform__", _fschedule_injective)

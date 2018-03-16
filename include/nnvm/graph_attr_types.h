@@ -54,6 +54,8 @@ using ShapeVector = std::vector<TShape>;
  */
 using DTypeVector = std::vector<int>;
 
+using LayoutVector = std::vector<std::string>;
+
 /*!
  * \brief The result holder of device of each operator in the graph.
  * \note Stored under graph.attrs["device"], provided by Pass "PlaceDevice"

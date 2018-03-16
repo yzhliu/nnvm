@@ -24,9 +24,100 @@ enum LayoutFlag {
   kNCDHW,
   kNDHWC,
   kCDHWN,
+  kUndef,
+  kNCHW3c,
   kNCHW8c,
   kNCHW16c,
 };
+
+inline const std::string& LayoutFlagStr(const int flag) {
+  static const std::vector<std::string> names = {
+    "NCHW",
+    "NHWC",
+    "CHWN",
+    "NCW",
+    "NWC",
+    "CWN",
+    "NCDHW",
+    "NDHWC",
+    "CDHWN",
+    "__undef__",
+    "NCHW3c",
+    "NCHW8c",
+    "NCHW16c",
+  };
+  return names[flag];
+}
+
+inline int LayoutFlagId(const std::string& layout) {
+  static const std::unordered_map<std::string, int> map = {
+    {"NCHW", kNCHW},
+    {"NHWC", kNHWC},
+    {"CHWN", kCHWN},
+    {"NCW", kNCW},
+    {"NWC", kNWC},
+    {"CWN", kCWN},
+    {"NCDHW", kNCDHW},
+    {"NDHWC", kNDHWC},
+    {"CDHWN", kCDHWN},
+    {"__undef__", kUndef},
+    {"NCHW3c", kNCHW3c},
+    {"NCHW8c", kNCHW8c},
+    {"NCHW16c", kNCHW16c},
+  };
+  return map.at(layout);
+}
+
+inline bool CheckLayoutConvertible(const std::string& from, const std::string& to) {
+  const int src_layout = LayoutFlagId(from);
+  const int dst_layout = LayoutFlagId(to);
+  switch (src_layout) {
+    case kUndef:
+      return false;
+    case kNCHW:
+    case kNHWC:
+    case kCHWN:
+    case kNCHW3c:
+    case kNCHW8c:
+    case kNCHW16c:
+      switch (dst_layout) {
+        case kNCHW:
+        case kNHWC:
+        case kCHWN:
+        case kNCHW3c:
+        case kNCHW8c:
+        case kNCHW16c:
+          return true;
+        default:
+          return false;
+      }
+    case kNCW:
+    case kNWC:
+    case kCWN:
+      switch (dst_layout) {
+        case kNCW:
+        case kNWC:
+        case kCWN:
+          return true;
+        default:
+          return false;
+      }
+    case kNCDHW:
+    case kNDHWC:
+    case kCDHWN:
+      switch (dst_layout) {
+        case kNCDHW:
+        case kNDHWC:
+        case kCDHWN:
+          return true;
+        default:
+          return false;
+      }
+    default:
+      LOG(FATAL) << "Unknown src layout " << from;
+  }
+  return false;
+}
 
 struct DenseParam : public dmlc::Parameter<DenseParam> {
   int units;
@@ -267,6 +358,39 @@ struct UpSamplingParam : public dmlc::Parameter<UpSamplingParam> {
   DMLC_DECLARE_PARAMETER(UpSamplingParam) {
     DMLC_DECLARE_FIELD(scale)
       .describe("upsampling scaling factor");
+  }
+};
+
+struct LayoutTransformParam : public dmlc::Parameter<LayoutTransformParam> {
+  int src_layout;
+  int dst_layout;
+
+  DMLC_DECLARE_PARAMETER(LayoutTransformParam) {
+    DMLC_DECLARE_FIELD(src_layout)
+    .add_enum("__undef__", kUndef)
+    .add_enum("NCHW", kNCHW)
+    .add_enum("NHWC", kNHWC)
+    .add_enum("NCHW3c", kNCHW3c)
+    .add_enum("NCHW8c", kNCHW8c)
+    .add_enum("NCHW16c", kNCHW16c)
+    .set_default(kUndef)
+    .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
+              "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
+              "dimensions respectively. Convolution is applied on the 'H' and"
+              "'W' dimensions.");
+
+    DMLC_DECLARE_FIELD(dst_layout)
+    .add_enum("__undef__", kUndef)
+    .add_enum("NCHW", kNCHW)
+    .add_enum("NHWC", kNHWC)
+    .add_enum("NCHW3c", kNCHW3c)
+    .add_enum("NCHW8c", kNCHW8c)
+    .add_enum("NCHW16c", kNCHW16c)
+    .set_default(kUndef)
+    .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
+              "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
+              "dimensions respectively. Convolution is applied on the 'H' and"
+              "'W' dimensions.");
   }
 };
 

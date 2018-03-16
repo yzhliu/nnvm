@@ -24,6 +24,7 @@ namespace top {
 using tvm::Tensor;
 using tvm::Array;
 using nnvm::compiler::FTVMCompute;
+using nnvm::compiler::FTVMLayoutRequest;
 
 struct ReorderParam : public dmlc::Parameter<ReorderParam> {
   int oc_bn;
@@ -85,7 +86,30 @@ NNVM_REGISTER_OP(reorder)
 .set_num_outputs(1)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", ReorderInferShape)
-.set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>(
+"FTVMLayoutRequest", [](const NodeAttrs& attrs,
+                        std::vector<TLayoutInfo> *ilayouts,
+                        std::vector<TLayoutInfo> *olayouts) {
+  const ReorderParam& param = nnvm::get<ReorderParam>(attrs.parsed);
+  TLayoutInfo out_layout;
+  switch (param.oc_bn) {
+    case 3:
+      out_layout = "NCHW3c";
+      break;
+    case 8:
+      out_layout = "NCHW8c";
+      break;
+    case 16:
+    default:
+      out_layout = "NCHW16c";
+      break;
+  }
+  CHECK_EQ(ilayouts->size(), 1U);
+  CHECK_EQ(olayouts->size(), 1U);
+  olayouts->at(0) = out_layout;
+  return true;
+})
 .set_attr<FTVMCompute>(
 "FTVMCompute", [](const NodeAttrs& attrs,
                   const Array<Tensor>& inputs,
@@ -110,7 +134,6 @@ inline bool BNReorderInferShape(const nnvm::NodeAttrs& attrs,
                                 std::vector<TShape>* in_shape,
                                 std::vector<TShape>* out_shape) {
   // c -> Cc
-  fprintf(stderr, "start BNReorderInferShape\n");
   const DataReorderParam& param = nnvm::get<DataReorderParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
@@ -121,7 +144,6 @@ inline bool BNReorderInferShape(const nnvm::NodeAttrs& attrs,
   ret[0] = shp[0] / param.bn;
   ret[1] = param.bn;
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, ret);
-  fprintf(stderr, "end BNReorderInferShape\n");
   return true;
 }
 
@@ -136,6 +158,29 @@ NNVM_REGISTER_OP(bn_reorder)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", BNReorderInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FTVMLayoutRequest>(
+"FTVMLayoutRequest", [](const NodeAttrs& attrs,
+                        std::vector<TLayoutInfo> *ilayouts,
+                        std::vector<TLayoutInfo> *olayouts) {
+  const DataReorderParam& param = nnvm::get<DataReorderParam>(attrs.parsed);
+  TLayoutInfo out_layout;
+  switch (param.bn) {
+    case 3:
+      out_layout = "NCHW3c";
+      break;
+    case 8:
+      out_layout = "NCHW8c";
+      break;
+    case 16:
+    default:
+      out_layout = "NCHW16c";
+      break;
+  }
+  CHECK_EQ(ilayouts->size(), 1U);
+  CHECK_EQ(olayouts->size(), 1U);
+  olayouts->at(0) = out_layout;
+  return true;
+})
 .set_attr<FTVMCompute>(
 "FTVMCompute", [](const NodeAttrs& attrs,
                   const Array<Tensor>& inputs,
@@ -178,6 +223,7 @@ NNVM_REGISTER_OP(data_reorder_back)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", DataReorderBackInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, 1>)
 .set_attr<FTVMCompute>(
 "FTVMCompute", [](const NodeAttrs& attrs,
                   const Array<Tensor>& inputs,

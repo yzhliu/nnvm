@@ -12,7 +12,7 @@ OPT_PASS_LEVEL = {
     "SimplifyInference": 0,
     "PrecomputePrune": 2,
     "OpFusion": 1,
-    "FoldScaleAxis": 3
+    "FoldScaleAxis": 3,
 }
 
 # List of optimization pass and level when switch on
@@ -135,8 +135,7 @@ def _update_shape_dtype(shape, dtype, params):
         dtype.update({k : str(v.dtype) for k, v in params.items()})
     return shape, dtype
 
-
-def optimize(graph, shape, dtype="float32"):
+def optimize(graph, shape, dtype="float32", layout=None):
     """Perform target and parameter invariant graph optimization.
 
     This is an advanced function that usually do not need to be called.
@@ -158,13 +157,32 @@ def optimize(graph, shape, dtype="float32"):
         graph = graph_attr.set_shape_inputs(graph, shape)
         graph = graph.apply(["InferShape", "SimplifyInference"])
 
+    # pre pack
+    print("PrePack start ...")
+    # layout = layout if layout else {}
+    # graph = graph_attr.set_layout_inputs(graph, layout)
+    graph = graph_attr.set_shape_inputs(graph, shape)
+    graph = graph_attr.set_dtype_inputs(graph, dtype)
+    graph = graph.apply(["InferShape", "InferType", "PrePack"])
+    print("PrePack done ...")
+    print("Layout fixing start ...")
+    graph = graph_attr.set_layout_inputs(graph, "NCHW")
+    graph = graph.apply(["LayoutTransform"])
+    print("Layout fixing done ...")
+    # TODO
+    # if not isinstance(dtype, str):
+    #     graph_util.infer_dtype(graph, **dtype)
+    with open('prepacked_graph.json', 'w') as fn:
+        fn.writelines(graph.json())
+
     if cfg.pass_enabled("FoldScaleAxis"):
         graph = graph_attr.set_shape_inputs(graph, shape)
         graph = graph.apply(["InferShape", "FoldScaleAxis"])
     return graph
 
 
-def build(graph, target=None, shape=None, dtype="float32", params=None, target_host=None):
+def build(graph, target=None, shape=None, dtype="float32",
+          params=None, target_host=None, layout=None):
     """Build graph into runtime library.
 
     The build function will optimize the graph and do the compilation.
@@ -201,6 +219,9 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
         By default, llvm is used if it is enabled,
         otherwise a stackvm intepreter is used.
 
+    layout : dict of str to str or str
+        The input layout
+
     Returns
     -------
     graph : Graph
@@ -225,16 +246,16 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
     graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)
     shape, dtype = _update_shape_dtype(shape, dtype, params)
 
-    # pre pack
+    # if layout:
+    #     graph = graph_attr.set_layout_inputs(graph, layout)
+    #     graph = graph.apply("LayoutTransform")
+        # layout = graph.json_attr("layout")
+        # index = graph.index
+        # layout = [layout[index.entry_id(x)] for x in index.input_names]
+        # olayout = [layout[index.entry_id(x)] for x in index.output_entries]
+
     graph = graph_attr.set_shape_inputs(graph, shape)
     graph = graph_attr.set_dtype_inputs(graph, dtype)
-    graph = graph.apply(["InferShape", "InferType", "PrePack"])
-    # TODO
-    # if not isinstance(dtype, str):
-    #     graph_util.infer_dtype(graph, **dtype)
-    print("PrePack done ...")
-    with open('prepacked_graph.json', 'w') as fn:
-        fn.writelines(graph.json())
 
     # Initial pass do shape type inference
     ishape, _ = graph_util.infer_shape(graph, **shape)
@@ -245,7 +266,7 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
 
     # Apply optimization
     print("start optimize ...")
-    graph = optimize(graph, shape, dtype)
+    graph = optimize(graph, shape, dtype, layout)
     # print('---- shapes ----')
     # ishape, oshape = graph_util.infer_shape(graph, **shape)
     # print(zip(graph.index.input_names, ishape))
@@ -259,7 +280,10 @@ def build(graph, target=None, shape=None, dtype="float32", params=None, target_h
         graph, params = precompute_prune(graph, params)
         shape, dtype = _update_shape_dtype(shape, dtype, params)
     # Operator Fusion and generation
+    # print(graph.index.input_names)
+    # print(shape)
     graph = graph_attr.set_shape_inputs(graph, shape)
+    graph = graph.apply("InferShape")
     graph = graph_attr.set_dtype_inputs(graph, dtype)
     graph._set_json_attr("target", str(target), "str")
     if target_host is not None:

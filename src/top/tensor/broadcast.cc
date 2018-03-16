@@ -11,6 +11,7 @@
 #include <nnvm/compiler/op_attr_types.h>
 #include <nnvm/compiler/util.h>
 #include <nnvm/top/tensor.h>
+#include <nnvm/top/nn.h>
 #include "../op_common.h"
 #include "../elemwise_op_common.h"
 #include "topi/broadcast.h"
@@ -74,6 +75,7 @@ So with `shape=(2,0)`, we will obtain the same result as in the above example.
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<BroadcastToParam>)
 .set_attr<FInferShape>("FInferShape", BroadcastToInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
     const Array<Tensor>& inputs,
@@ -126,13 +128,14 @@ inline bool BinaryBroadcastShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-
 #define NNVM_REGISTER_BINARY_BROADCAST_OP(name)                     \
   NNVM_REGISTER_OP(name)                                            \
   .set_num_inputs(2)                                                \
   .set_num_outputs(1)                                               \
   .set_attr<FInferShape>("FInferShape", BinaryBroadcastShape)       \
   .set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)           \
+  .set_attr<FTVMLayoutRequest>("FTVMLayoutRequest",                 \
+    ElemwiseBinaryLayout)                                           \
   .set_attr<FInplaceOption>("FInplaceOption",                       \
     [](const NodeAttrs& attrs) {                                    \
       return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \
