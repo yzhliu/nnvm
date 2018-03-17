@@ -164,7 +164,7 @@ a bias vector is created and added to the outputs.
 });
 
 
-struct Conv2DNoPackParam : public dmlc::Parameter<Conv2DNoPackParam> {
+struct Conv2DNCHWcParam : public dmlc::Parameter<Conv2DNCHWcParam> {
   int channels;
   TShape kernel_size;
   TShape strides;
@@ -175,7 +175,7 @@ struct Conv2DNoPackParam : public dmlc::Parameter<Conv2DNoPackParam> {
   int ic_bn;
   int oc_bn;
 
-  DMLC_DECLARE_PARAMETER(Conv2DNoPackParam) {
+  DMLC_DECLARE_PARAMETER(Conv2DNCHWcParam) {
     DMLC_DECLARE_FIELD(channels)
     .describe("The dimensionality of the output space"
               "i.e. the number of output channels in the convolution.");
@@ -206,12 +206,12 @@ struct Conv2DNoPackParam : public dmlc::Parameter<Conv2DNoPackParam> {
   static const constexpr int kWeight = 1;
   static const constexpr int kBias = 2;
 };
-DMLC_REGISTER_PARAMETER(Conv2DNoPackParam);
+DMLC_REGISTER_PARAMETER(Conv2DNCHWcParam);
 
 inline bool Conv2DNoPackInferShape(const nnvm::NodeAttrs& attrs,
                                    std::vector<TShape>* in_shape,
                                    std::vector<TShape>* out_shape) {
-  const Conv2DNoPackParam& param = nnvm::get<Conv2DNoPackParam>(attrs.parsed);
+  const Conv2DNCHWcParam& param = nnvm::get<Conv2DNCHWcParam>(attrs.parsed);
   if (param.use_bias) {
     CHECK_EQ(in_shape->size(), 3U) << "Input:[data, weight, bias]";
   } else {
@@ -240,7 +240,7 @@ inline bool Conv2DNoPackInferShape(const nnvm::NodeAttrs& attrs,
 
   if (param.use_bias) {
     NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape,
-                            Conv2DNoPackParam::kBias, TShape({param.channels/param.oc_bn, param.oc_bn}));
+                            Conv2DNCHWcParam::kBias, TShape({param.channels/param.oc_bn, param.oc_bn}));
   }
   // dilation
   dim_t dilated_ksize_y = 1 + (param.kernel_size[0] - 1) * param.dilation[0];
@@ -264,7 +264,7 @@ inline bool Conv2DNoPackInferShape(const nnvm::NodeAttrs& attrs,
   if (oshape[3] && param.strides[1] == 1) {
     dshape[3] = oshape[3] + dilated_ksize_x - 1 - 2 * param.padding[1];
   }
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DNoPackParam::kData, dshape);
+  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DNCHWcParam::kData, dshape);
   // Check whether the kernel sizes are valid
   if (dshape[2] != 0) {
     CHECK_LE(dilated_ksize_y, dshape[2] + 2 * param.padding[0])
@@ -277,23 +277,23 @@ inline bool Conv2DNoPackInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-NNVM_REGISTER_OP(conv2d_nopack)
+NNVM_REGISTER_OP(conv2d_nChwc)
 .describe(R"code(2D convolution layer (e.g. spatial convolution over images).
 )code" NNVM_ADD_FILELINE)
 .add_argument("data", "5D Tensor", "Packed input data.")
 .add_argument("weight", "6D Tensor", "Packed weight matrix.")
 .add_argument("bias", "1D Tensor", "Bias parameter.")
-.add_arguments(Conv2DNoPackParam::__FIELDS__())
-.set_attr_parser(ParamParser<Conv2DNoPackParam>)
-.set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Conv2DNoPackParam>)
-.set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DNoPackParam>)
+.add_arguments(Conv2DNCHWcParam::__FIELDS__())
+.set_attr_parser(ParamParser<Conv2DNCHWcParam>)
+.set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Conv2DNCHWcParam>)
+.set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DNCHWcParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DNoPackInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
 .set_attr<FTVMLayoutRequest>(
 "FTVMLayoutRequest", [](const NodeAttrs& attrs,
                         std::vector<TLayoutInfo> *ilayouts,
                         std::vector<TLayoutInfo> *olayouts) {
-  const Conv2DNoPackParam& param = nnvm::get<Conv2DNoPackParam>(attrs.parsed);
+  const Conv2DNCHWcParam& param = nnvm::get<Conv2DNCHWcParam>(attrs.parsed);
   TLayoutInfo in_layout;
   TLayoutInfo out_layout;
   switch (param.ic_bn) {
@@ -323,16 +323,10 @@ NNVM_REGISTER_OP(conv2d_nopack)
 
   if (param.use_bias) {
     CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
-    // TODO: decide arg layout
-    // TODO: now we assume arg layout is correctly converted.
-//    ilayouts->at(1) = in_layout;
-//    ilayouts->at(2) = in_layout;
   } else {
     CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
-    // TODO: decide arg layout
-    // TODO: now we assume arg layout is correctly converted.
-//    ilayouts->at(1) = in_layout;
   }
+  // TODO: decide arg layout. now we assume arg layout has been correctly converted.
   ilayouts->at(0) = in_layout;
 
   CHECK_EQ(olayouts->size(), 1U);
@@ -341,7 +335,7 @@ NNVM_REGISTER_OP(conv2d_nopack)
   return true;
 })
 .set_num_outputs(1)
-.set_num_inputs(UseBiasNumInputs<Conv2DNoPackParam>)
+.set_num_inputs(UseBiasNumInputs<Conv2DNCHWcParam>)
 .set_support_level(2);
 
 

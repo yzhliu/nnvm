@@ -96,9 +96,9 @@ def schedule_conv2d(attrs, outs, target):
 reg.register_pattern("conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # convolution no pack
-@reg.register_compute("conv2d_nopack")
-def compute_conv2d_nopack(attrs, inputs, _):
-    """Compute definition of conv2d nopack"""
+@reg.register_compute("conv2d_nChwc")
+def compute_conv2d_nChwc(attrs, inputs, _):
+    """Compute definition of conv2d nChwc"""
     padding = attrs.get_int_tuple("padding")
     strides = attrs.get_int_tuple("strides")
     dilation = attrs.get_int_tuple("dilation")
@@ -107,7 +107,7 @@ def compute_conv2d_nopack(attrs, inputs, _):
     channels = attrs.get_int("channels")
     assert dilation == (1, 1), "not support dilate now"
     if groups == 1:
-        out = topi.nn.conv2d_nopack(inputs[0], inputs[1], (channels, kh, kw), strides, padding)
+        out = topi.nn.conv2d_nChwc(inputs[0], inputs[1], channels, (kh, kw), strides, padding)
     else:
         raise ValueError("not support arbitrary group number > 1 for now")
     if attrs.get_bool("use_bias"):
@@ -116,19 +116,19 @@ def compute_conv2d_nopack(attrs, inputs, _):
         out = topi.broadcast_add(out, bias)
     return out
 
-@reg.register_schedule("conv2d_nopack")
-def schedule_conv2d_nopack(attrs, outs, target):
+@reg.register_schedule("conv2d_nChwc")
+def schedule_conv2d_nChwc(attrs, outs, target):
     """Schedule definition of conv2d"""
     groups = attrs.get_int("groups")
     kh, kw = attrs.get_int_tuple('kernel_size')
     oc = attrs.get_int("channels")
     with tvm.target.create(target):
         if groups == 1:
-            return topi.generic.schedule_conv2d_nopack((oc, kh, kw), outs)
+            return topi.generic.schedule_conv2d_nChwc(oc, (kh, kw), outs)
         else:
             raise ValueError("not support group number > 1 for now")
 
-reg.register_pattern("conv2d_nopack", OpPattern.OUT_ELEMWISE_FUSABLE)
+reg.register_pattern("conv2d_nChwc", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # conv2d_transpose
 @reg.register_compute("conv2d_transpose")
