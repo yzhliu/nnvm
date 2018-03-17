@@ -7,9 +7,16 @@
 #include "../compiler/graph_transform.h"
 #include <tvm/tvm.h>
 
+using nnvm::compiler::TLayoutInfo;
+
 namespace nnvm {
 namespace pass {
 namespace {
+
+const TLayoutInfo& GetDefaultLayout() {
+  static TLayoutInfo default_layout = "__undef__";
+  return default_layout;
+}
 
 // convert from type flag to tvm type.
 tvm::Type GetTVMType(int type_flag) {
@@ -66,8 +73,27 @@ Graph PrePack(const Graph& src) {
   const DTypeVector& dtype_vec = src.GetAttr<DTypeVector>("dtype");
   const IndexedGraph& idx_graph = src.indexed_graph();
 
+  std::unordered_map<const Node*, std::vector<TLayoutInfo> > new_layouts;
+
   auto transform = [&](uint32_t nid, const NodePtr& n, std::vector<NodeEntry>* ret) {
-    if (n->is_variable()) return false;
+    if (src.HasAttr("layout")) {
+      // save the original layouts for further transform.
+      const auto& layouts = src.GetAttr<std::vector<TLayoutInfo> >("layout");
+      if (new_layouts.count(n.get())) {
+        auto iter = new_layouts.find(n.get());
+        for (uint32_t i = 0; i < n->num_outputs(); ++i) {
+          const auto &layout = layouts[idx_graph.entry_id(nid, i)];
+          iter->second.at(i) = layout;
+        }
+      } else {
+        std::vector<TLayoutInfo> output_layout;
+        for (uint32_t i = 0; i < n->num_outputs(); ++i) {
+          const auto &layout = layouts[idx_graph.entry_id(nid, i)];
+          output_layout.emplace_back(layout);
+        }
+        new_layouts[n.get()] = output_layout;
+      }
+    }
 
     nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
     if (fn_prepack == nullptr) return false;
@@ -96,7 +122,31 @@ Graph PrePack(const Graph& src) {
     return true;
   };
 
-  return nnvm::compiler::GraphTransform(src, transform);
+  Graph ret = nnvm::compiler::GraphTransform(src, transform);
+
+  if (src.HasAttr("layout")) {
+    // restore the layouts to return graph
+    const auto& ret_idx = ret.indexed_graph();
+    std::vector<TLayoutInfo> ret_layouts(ret_idx.num_node_entries(), GetDefaultLayout());
+    for (uint32_t nid = 0; nid < ret_idx.num_nodes(); ++nid) {
+      const auto& inode = ret_idx[nid];
+      const auto& layout_iter = new_layouts.find(inode.source);
+      if (layout_iter != new_layouts.end()) {
+        for (uint32_t i = 0; i < inode.source->num_outputs(); ++i) {
+          ret_layouts[ret_idx.entry_id(nid, i)] = layout_iter->second[i];
+        }
+      }
+    }
+
+    // cannot call indexed_graph() before return the origin Graph,
+    // thus create a new one.
+    nnvm::Graph new_ret;
+    new_ret.outputs = ret.outputs;
+    new_ret.attrs["layout"] = std::make_shared<any>(std::move(ret_layouts));
+    return new_ret;
+  }
+
+  return ret;
 }
 
 // register pass

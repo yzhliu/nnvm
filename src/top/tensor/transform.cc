@@ -180,7 +180,7 @@ inline bool ExpandDimsInferShape(const NodeAttrs& attrs,
   const TShape& dshape = in_shape->at(0);
   int ndim = static_cast<int>(dshape.ndim());
   CHECK(param.axis >= -ndim - 1 && param.axis <= ndim)
-    << "axis = " << param.axis << " ndim = " << ndim;
+    << "with axis = " << param.axis << " ndim = " << ndim;
   int axis = param.axis < 0 ? ndim + param.axis + 1 : param.axis;
   std::vector<dim_t> oshape;
   for (int i = 0; i < axis; ++i) {

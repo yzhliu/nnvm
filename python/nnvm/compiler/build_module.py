@@ -13,6 +13,7 @@ OPT_PASS_LEVEL = {
     "PrecomputePrune": 2,
     "OpFusion": 1,
     "FoldScaleAxis": 3,
+    "OpPacking": 2,
 }
 
 # List of optimization pass and level when switch on
@@ -135,6 +136,7 @@ def _update_shape_dtype(shape, dtype, params):
         dtype.update({k : str(v.dtype) for k, v in params.items()})
     return shape, dtype
 
+
 def optimize(graph, shape, dtype="float32", layout=None):
     """Perform target and parameter invariant graph optimization.
 
@@ -157,23 +159,16 @@ def optimize(graph, shape, dtype="float32", layout=None):
         graph = graph_attr.set_shape_inputs(graph, shape)
         graph = graph.apply(["InferShape", "SimplifyInference"])
 
-    # pre pack
-    print("PrePack start ...")
-    # layout = layout if layout else {}
-    # graph = graph_attr.set_layout_inputs(graph, layout)
-    graph = graph_attr.set_shape_inputs(graph, shape)
-    graph = graph_attr.set_dtype_inputs(graph, dtype)
-    graph = graph.apply(["InferShape", "InferType", "PrePack"])
-    print("PrePack done ...")
-    print("Layout fixing start ...")
-    graph = graph_attr.set_layout_inputs(graph, "NCHW")
-    graph = graph.apply(["LayoutTransform"])
-    print("Layout fixing done ...")
-    # TODO
-    # if not isinstance(dtype, str):
-    #     graph_util.infer_dtype(graph, **dtype)
-    with open('prepacked_graph.json', 'w') as fn:
-        fn.writelines(graph.json())
+    if cfg.pass_enabled("OpPacking"):
+        layout = layout if layout else {}
+        graph = graph_attr.set_layout_inputs(graph, layout)
+        graph = graph.apply(["LayoutTransform"])
+
+        graph = graph_attr.set_shape_inputs(graph, shape)
+        graph = graph_attr.set_dtype_inputs(graph, dtype)
+        graph = graph.apply(["InferShape", "InferType", "PrePack"])
+        graph = graph_attr.set_layout_inputs(graph, layout)
+        graph = graph.apply(["LayoutTransform"])
 
     if cfg.pass_enabled("FoldScaleAxis"):
         graph = graph_attr.set_shape_inputs(graph, shape)
@@ -246,16 +241,10 @@ def build(graph, target=None, shape=None, dtype="float32",
     graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)
     shape, dtype = _update_shape_dtype(shape, dtype, params)
 
-    # if layout:
-    #     graph = graph_attr.set_layout_inputs(graph, layout)
-    #     graph = graph.apply("LayoutTransform")
-        # layout = graph.json_attr("layout")
-        # index = graph.index
-        # layout = [layout[index.entry_id(x)] for x in index.input_names]
-        # olayout = [layout[index.entry_id(x)] for x in index.output_entries]
-
-    graph = graph_attr.set_shape_inputs(graph, shape)
-    graph = graph_attr.set_dtype_inputs(graph, dtype)
+    # fix layout if necessary
+    if layout:
+        graph = graph_attr.set_layout_inputs(graph, layout)
+        graph = graph.apply("LayoutTransform")
 
     # Initial pass do shape type inference
     ishape, _ = graph_util.infer_shape(graph, **shape)
@@ -265,23 +254,12 @@ def build(graph, target=None, shape=None, dtype="float32",
         dtype.update(zip(graph.index.input_names, idtype))
 
     # Apply optimization
-    print("start optimize ...")
     graph = optimize(graph, shape, dtype, layout)
-    # print('---- shapes ----')
-    # ishape, oshape = graph_util.infer_shape(graph, **shape)
-    # print(zip(graph.index.input_names, ishape))
-    # print(zip(graph.index.output_entries, oshape))
-    print("start dump graph...")
-    with open('before_pre_graph.json', 'w') as fn:
-        fn.writelines(graph.json())
     # Precompute prune
     if params and cfg.pass_enabled("PrecomputePrune"):
-        print('Start pre-compute ...')
         graph, params = precompute_prune(graph, params)
         shape, dtype = _update_shape_dtype(shape, dtype, params)
     # Operator Fusion and generation
-    # print(graph.index.input_names)
-    # print(shape)
     graph = graph_attr.set_shape_inputs(graph, shape)
     graph = graph.apply("InferShape")
     graph = graph_attr.set_dtype_inputs(graph, dtype)
@@ -296,7 +274,6 @@ def build(graph, target=None, shape=None, dtype="float32",
     with target:
         graph = graph.apply("GraphFusePartition").apply("GraphFuseCompile")
     libmod = graph_attr._move_out_module(graph, "module")
-    print("build_module done.")
     return graph, libmod, params
 
 
@@ -316,22 +293,15 @@ def _run_graph(graph, params):
     out_dict: dict of str to tvm.NDArray
         The output dictionaries.
     """
-    print('graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)')
     graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)
-    print('DONE graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)')
     shape = {k : v.shape for k, v in params.items()}
     dtype = {k : v.dtype for k, v in params.items()}
     target = "llvm"
     ctx = tvm.cpu(0)
-    print('graph_util.infer_shape(graph, **shape)')
     _, oshape = graph_util.infer_shape(graph, **shape)
-    print('graph_util.infer_dtype(graph, **dtype)')
     _, odtype = graph_util.infer_dtype(graph, **dtype)
-    print('build(graph, target, shape, dtype)')
     graph, libmod, _ = build(graph, target, shape, dtype)
-    print('m = graph_runtime.create(graph, libmod, ctx)')
     m = graph_runtime.create(graph, libmod, ctx)
-    print('DONE m = graph_runtime.create(graph, libmod, ctx)')
     set_input, run, get_output = m["set_input"], m["run"], m["get_output"]
     for k, v in params.items():
         set_input(k, tvm.nd.array(v))
@@ -376,12 +346,8 @@ def precompute_prune(graph, params):
     if pre_graph is None:
         return graph, params
     out_names = pre_graph.json_attr("output_names")
-    with open('pre_graph.json', 'w') as fn:
-        fn.writelines(pre_graph.json())
     if not pre_graph.symbol.list_output_names():
         return graph, params
     with tvm.build_config(auto_unroll_max_step=0):
-        print('start to compute precompute')
         out_arrs = _run_graph(pre_graph, params)
-        print('end compute precompute')
     return graph, dict(zip(out_names, out_arrs))

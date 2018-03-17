@@ -97,9 +97,6 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
         << "Layout request fail";
     CHECK_EQ(request_ilayouts.size(), new_node->num_inputs());
     CHECK_EQ(produce_olayouts.size(), new_node->num_outputs());
-    for (int i = 0; i < request_ilayouts.size(); ++i) {
-      fprintf(stderr, "REQ of [%s] input layout: %s\n", new_node->op()->name.c_str(), request_ilayouts[i].c_str());
-    }
 
     // update new layouts
     new_layouts[new_node.get()] = produce_olayouts;
@@ -112,23 +109,14 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
       // insert layout_transform if necessary
       TLayoutInfo produce = produce_ilayouts[i];
       TLayoutInfo request = request_ilayouts[i];
-      if (produce != request) {
-        if (produce == "__undef__") {
-          LOG(WARNING) << "Operator " << new_node->op()->name
-                       << " requires layout " << request
-                       << ". Is it what you want? "
-                       << "If your input data is in different layout, "
-                       << "you can specify in nnvm.compiler.build";
-        } else {
-          fprintf(stderr, "Insert layout_transform before [%s]\n", new_node->op()->name.c_str());
-          nnvm::NodePtr tnode = CreateLayoutTransformNode(produce, request);
-          tnode->attrs.name = idx[e.node_id].source->attrs.name + "_" + request;
-          tnode->inputs.emplace_back(new_node->inputs[i]);
-          nnvm::NodeEntry tnode_output{tnode, 0, 0};
-          new_node->inputs[i] = tnode_output;
-          // layout produced by LayoutTransformNode
-          new_layouts[tnode.get()] = {request};
-        }
+      if (produce != request && produce != "__undef__") {
+        nnvm::NodePtr tnode = CreateLayoutTransformNode(produce, request);
+        tnode->attrs.name = idx[e.node_id].source->attrs.name + "_" + request;
+        tnode->inputs.emplace_back(new_node->inputs[i]);
+        nnvm::NodeEntry tnode_output{tnode, 0, 0};
+        new_node->inputs[i] = tnode_output;
+        // layout produced by LayoutTransformNode
+        new_layouts[tnode.get()] = {request};
       }
     }
     mirror_vec[nid] = new_node;
@@ -155,7 +143,7 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
   }
 
   // cannot call indexed_graph() before return the origin Graph,
-  // thus create a new one.
+  // thus create a new one
   nnvm::Graph new_ret;
   new_ret.outputs = std::move(outputs);
   new_ret.attrs["layout"] = std::make_shared<any>(std::move(ret_layouts));
