@@ -197,11 +197,12 @@ def _upsampling(inputs, attrs):
 
 def _contrib_MultiBoxDetection(inputs, attrs):
     clip = _parse_bool_str(attrs, 'clip', default='True')
-    threshold = attrs.get('threshold')
-    nms_threshold = attrs.get('nms_threshold')
+    threshold = attrs.get('threshold') or 0.01
+    nms_threshold = attrs.get('nms_threshold') or 0.5
     force_suppress = _parse_bool_str(attrs, 'force_suppress', default='False')
-    variances = tuple([float(x.strip()) for x in attrs.get('variances').strip('()').split(',')])
-    nms_topk = attrs.get('nms_topk')
+    variances = tuple([float(x.strip()) for x in attrs.get('variances').strip('()').split(',')]) \
+        if attrs.get('variances') is not None else (0.1, 0.1, 0.2, 0.2)
+    nms_topk = attrs.get('nms_topk') or -1
     new_attrs = {'clip': clip, 'threshold': float(threshold),
                  'nms_threshold': float(nms_threshold),
                  'force_suppress': force_suppress,
