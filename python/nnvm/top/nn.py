@@ -95,7 +95,7 @@ def schedule_conv2d(attrs, outs, target):
 
 reg.register_pattern("conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
-# convolution no pack
+# convolution nChwc
 @reg.register_compute("conv2d_nChwc")
 def compute_conv2d_nChwc(attrs, inputs, _):
     """Compute definition of conv2d nChwc"""
@@ -129,6 +129,43 @@ def schedule_conv2d_nChwc(attrs, outs, target):
             raise ValueError("not support group number > 1 for now")
 
 reg.register_pattern("conv2d_nChwc", OpPattern.OUT_ELEMWISE_FUSABLE)
+
+# convolution NCHW kernel pack
+@reg.register_compute("_contrib_conv2d_nchwc_kernel_packed")
+def compute_contrib_conv2d_nchwc_kernel_packed(attrs, inputs, _):
+    """Compute definition of conv2d NCHW kernel packed"""
+    padding = attrs.get_int_tuple("padding")
+    strides = attrs.get_int_tuple("strides")
+    dilation = attrs.get_int_tuple("dilation")
+    kh, kw = attrs.get_int_tuple('kernel_size')
+    groups = attrs.get_int("groups")
+    channels = attrs.get_int("channels")
+    assert dilation == (1, 1), "not support dilate now"
+    if groups == 1:
+        out = topi.nn._contrib_conv2d_nchwc_kernel_packed(inputs[0], inputs[1],
+                                                          channels, (kh, kw),
+                                                          strides, padding)
+    else:
+        raise ValueError("not support arbitrary group number > 1 for now")
+    if attrs.get_bool("use_bias"):
+        bias = inputs[2]
+        bias = topi.expand_dims(bias, axis=1, num_newaxis=2)
+        out = topi.broadcast_add(out, bias)
+    return out
+
+@reg.register_schedule("_contrib_conv2d_nchwc_kernel_packed")
+def schedule_contrib_conv2d_nchwc_kernel_packed(attrs, outs, target):
+    """Schedule definition of conv2d"""
+    groups = attrs.get_int("groups")
+    kh, kw = attrs.get_int_tuple('kernel_size')
+    oc = attrs.get_int("channels")
+    with tvm.target.create(target):
+        if groups == 1:
+            return topi.generic.schedule_contrib_conv2d_nchwc_kernel_packed(oc, (kh, kw), outs)
+        else:
+            raise ValueError("not support group number > 1 for now")
+
+reg.register_pattern("_contrib_conv2d_nchwc_kernel_packed", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # conv2d_transpose
 @reg.register_compute("conv2d_transpose")
