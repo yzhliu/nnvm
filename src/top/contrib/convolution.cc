@@ -139,7 +139,7 @@ inline bool Conv2DNCHWKernelPrePackInferShape(const nnvm::NodeAttrs& attrs,
     return true;
 }
 
-NNVM_REGISTER_OP(_contrib_conv2d_nchwc_kernel_packed)
+NNVM_REGISTER_OP(_contrib_conv2d_nchw_kernel_packed)
 .describe(R"code(2D convolution layer (e.g. spatial convolution over images).
 )code" NNVM_ADD_FILELINE)
 .add_argument("data", "4D Tensor", "Input data.")
