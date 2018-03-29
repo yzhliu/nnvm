@@ -89,7 +89,7 @@ inline bool Conv2DNCHWKernelPrePackInferShape(const nnvm::NodeAttrs& attrs,
     TShape dshape = in_shape->at(0);
     if (dshape.ndim() == 0) return false;
 
-    CHECK_EQ(dshape.ndim(), 5U) << "Input data should be 5D";
+    CHECK_EQ(dshape.ndim(), 4U) << "Input data should be 4D";
     CHECK_EQ(param.kernel_size.ndim(), 2U);
     CHECK_EQ(param.strides.ndim(), 2U)
             << "incorrect stride size: " << param.strides;
