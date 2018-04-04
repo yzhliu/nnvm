@@ -556,160 +556,36 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
     LOG(FATAL) << "cannot convert from/to undefined layout";
   }
 
-  auto src_ndim = inputs[0].ndim();
-  if (src_ndim == 3) {
-    if ((param.src_layout == kNCW && param.dst_layout == kNWC) ||
-        (param.src_layout == kNWC && param.dst_layout == kNCW)) {
-      return Array<Tensor> {
-      topi::layout_transform(inputs[0], outputs[0]->shape,
-                             [&](const Array<Var>& dst_indices){
-                               return Array<Expr>{ dst_indices[0],
-                                                   dst_indices[2],
-                                                   dst_indices[1] };
-                             })};
-    }
-  } else if (src_ndim == 4) {
-    switch (param.src_layout) {
-      case kNCHW: {
-        switch (param.dst_layout) {
-          case kNHWC: {
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var> &dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         dst_indices[3],
-                                                         dst_indices[1],
-                                                         dst_indices[2] };
-                                   })};
-          }
-          case kNCHW3c:
-          case kNCHW8c:
-          case kNCHW16c: {
-            Expr block = (param.dst_layout == kNCHW3c) ? Expr(3) :
-                         ((param.dst_layout == kNCHW8c) ? Expr(8) : Expr(16));
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var> &dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         dst_indices[1]*block + dst_indices[4],
-                                                         dst_indices[2],
-                                                         dst_indices[3] };
-                                   })};
-          }
-          default: break;
+  Layout src_layout(LayoutFlagStr(param.src_layout));
+  Layout dst_layout(LayoutFlagStr(param.dst_layout));
+
+  CHECK(src_layout.ConvertibleTo(dst_layout)) << "cannot convert from " << param.src_layout
+                                              << " to " << param.dst_layout;
+
+  return Array<Tensor> {
+    topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
+      std::vector<Expr> dst_to_src_indices;
+      for (char src_axis : src_layout) {
+        int dst_major_pos = dst_layout.PosMajor(src_axis);
+        int dst_minor_pos = dst_layout.PosMinor(src_axis);
+        uint32_t src_factor = src_layout.FactorSize(src_axis);
+        uint32_t dst_factor = dst_layout.FactorSize(src_axis);
+
+        Expr src_index(dst_indices[dst_major_pos]);
+        if (dst_minor_pos >= 0) {
+          CHECK(dst_factor > 0);
+          src_index = src_index * Expr(dst_factor) + dst_indices[dst_minor_pos];
         }
-      }  // param.src_layout == kNCHW
-      case kNHWC: {
-        switch (param.dst_layout) {
-          case kNCHW: {
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var> &dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         dst_indices[2],
-                                                         dst_indices[3],
-                                                         dst_indices[1] };
-                                   })};
-          }
-          case kNCHW3c:
-          case kNCHW8c:
-          case kNCHW16c: {
-            Expr block = (param.dst_layout == kNCHW3c) ? Expr(3) :
-                         ((param.dst_layout == kNCHW8c) ? Expr(8) : Expr(16));
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var>& dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         dst_indices[2],
-                                                         dst_indices[3],
-                                                         dst_indices[1]*block + dst_indices[4] };
-                                   })};
-          }
-          default: break;
+        if (Layout::IsMajorAxis(src_axis) && src_factor > 0) {
+          src_index = src_index / Expr(src_factor);
+        } else if (Layout::IsMinorAxis(src_axis) && src_factor > 0) {
+          src_index = src_index % Expr(src_factor);
         }
-      }  // param.src_layout == kNHWC
-      default: break;
-    }
-  } else if (src_ndim == 5) {
-    switch (param.src_layout) {
-      case kNCHW3c:
-      case kNCHW8c:
-      case kNCHW16c: {
-        Expr src_block = (param.src_layout == kNCHW3c) ? Expr(3) :
-                         ((param.src_layout == kNCHW8c) ? Expr(8) : Expr(16));
-        switch (param.dst_layout) {
-          case kNCHW: {
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var>& dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         dst_indices[1] / src_block,
-                                                         dst_indices[2],
-                                                         dst_indices[3],
-                                                         dst_indices[1] % src_block };
-                                   })};
-          }
-          case kNHWC: {
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var>& dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         dst_indices[3] / src_block,
-                                                         dst_indices[1],
-                                                         dst_indices[2],
-                                                         dst_indices[3] % src_block };
-                                   })};
-          }
-          case kNCHW3c:
-          case kNCHW8c:
-          case kNCHW16c: {
-            Expr dst_block = (param.src_layout == kNCHW3c) ? Expr(3) :
-                             ((param.src_layout == kNCHW8c) ? Expr(8) : Expr(16));
-            return Array<Tensor> {
-            topi::layout_transform(inputs[0], outputs[0]->shape,
-                                   [&](const Array<Var>& dst_indices) {
-                                     return Array<Expr>{ dst_indices[0],
-                                                         (dst_indices[1]*dst_block + dst_indices[4]) / src_block,
-                                                         dst_indices[2],
-                                                         dst_indices[3],
-                                                         (dst_indices[1]*dst_block + dst_indices[4]) % src_block };
-                                   })};
-          }
-          default: break;
-        }
+        dst_to_src_indices.push_back(src_index);
       }
-      case kNCDHW: {
-        if (param.dst_layout == kNDHWC) {
-          return Array<Tensor> {
-          topi::layout_transform(inputs[0], outputs[0]->shape,
-                                 [&](const Array<Var>& dst_indices) {
-                                   return Array<Expr>{ dst_indices[0],
-                                                       dst_indices[4],
-                                                       dst_indices[1],
-                                                       dst_indices[2],
-                                                       dst_indices[3] };
-                                 })};
-        }
-        break;
-      }
-      case kNDHWC: {
-        if (param.dst_layout == kNCDHW) {
-          return Array<Tensor> {
-          topi::layout_transform(inputs[0], outputs[0]->shape,
-                                 [&](const Array<Var> &dst_indices) {
-                                   return Array<Expr>{dst_indices[0],
-                                                      dst_indices[2],
-                                                      dst_indices[3],
-                                                      dst_indices[4],
-                                                      dst_indices[1]};
-                                 })};
-        }
-        break;
-      }
-      default: break;
-    }
-  }
-  LOG(FATAL) << "cannot convert from " << param.src_layout << " to " << param.dst_layout;
+      return Array<Expr>(dst_to_src_indices);
+    })
+  };
 })
 .set_support_level(1);
 

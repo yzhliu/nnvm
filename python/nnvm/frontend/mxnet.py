@@ -95,16 +95,6 @@ def _conv2d(inputs, attrs):
     new_attrs['groups'] = attrs.get('num_group', 1)
     new_attrs['layout'] = layout
     new_attrs['use_bias'] = attrs.get('no_bias', 'False').strip() == 'False'
-
-    # print('Conv2d Inputs: ' + str(inputs))
-    # op_reorder = _get_nnvm_op('reorder')
-    # ic_bn = 3 if len(inputs[0].list_input_names()) == 1 else 16
-    # oc_bn = 16
-    # kernel_input = inputs[1]
-    # reorder_attrs = {'ic_bn' : ic_bn, 'oc_bn' : oc_bn}
-    # trans_kernel = op_reorder(kernel_input, **reorder_attrs)
-    # inputs[1] = trans_kernel
-
     return _get_nnvm_op(op_name)(*inputs, **new_attrs)
 
 def _conv2d_transpose(inputs, attrs):

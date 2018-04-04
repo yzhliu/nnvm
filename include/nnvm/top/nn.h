@@ -9,6 +9,7 @@
 #include <dmlc/base.h>
 #include <dmlc/parameter.h>
 #include <nnvm/tuple.h>
+#include <nnvm/layout.h>
 
 namespace nnvm {
 namespace top {
@@ -69,54 +70,10 @@ inline int LayoutFlagId(const std::string& layout) {
 }
 
 inline bool CheckLayoutConvertible(const std::string& from, const std::string& to) {
-  const int src_layout = LayoutFlagId(from);
-  const int dst_layout = LayoutFlagId(to);
-  switch (src_layout) {
-    case kUndef:
-      return false;
-    case kNCHW:
-    case kNHWC:
-    case kCHWN:
-    case kNCHW3c:
-    case kNCHW8c:
-    case kNCHW16c:
-      switch (dst_layout) {
-        case kNCHW:
-        case kNHWC:
-        case kCHWN:
-        case kNCHW3c:
-        case kNCHW8c:
-        case kNCHW16c:
-          return true;
-        default:
-          return false;
-      }
-    case kNCW:
-    case kNWC:
-    case kCWN:
-      switch (dst_layout) {
-        case kNCW:
-        case kNWC:
-        case kCWN:
-          return true;
-        default:
-          return false;
-      }
-    case kNCDHW:
-    case kNDHWC:
-    case kCDHWN:
-      switch (dst_layout) {
-        case kNCDHW:
-        case kNDHWC:
-        case kCDHWN:
-          return true;
-        default:
-          return false;
-      }
-    default:
-      LOG(FATAL) << "Unknown src layout " << from;
+  if (from == "__undef__" || to == "__undef__") {
+    return false;
   }
-  return false;
+  return nnvm::Layout(from).ConvertibleTo(to);
 }
 
 struct DenseParam : public dmlc::Parameter<DenseParam> {
