@@ -14,12 +14,13 @@ namespace nnvm {
 
 class Layout {
  public:
+  using LayoutAxis = char;
   Layout(const std::string& layout)
-    : layout(layout), major_position(26, -1), minor_position(26, -1), minor_factor(26, 0) {
+    : name(layout), major_position(26, -1), minor_position(26, -1), minor_factor(26, 0) {
     uint32_t factor = 0;
     uint32_t curr = 0;
     for (size_t i = 0; i < layout.size(); ++i) {
-      const char c = layout.at(i);
+      const LayoutAxis c = layout.at(i);
       if (IsMajorAxis(c)) {
         int pos = c - 'A';
         CHECK_EQ(factor, 0) << "Invalid layout " << layout
@@ -46,25 +47,25 @@ class Layout {
         LOG(FATAL) << "Invalid layout " << layout;
       }
     }
-    for (char axis : layout_simplified) {
+    for (LayoutAxis axis : layout_simplified) {
       CHECK(IsMajorAxis(axis) || major_position[axis-'a'] >= 0)
         << "Invalid layout " << layout << ": missing axis "
         << static_cast<char>(axis - 'a' + 'A');
     }
   }
 
-  static inline bool IsMajorAxis(char c) {
+  static inline bool IsMajorAxis(LayoutAxis c) {
     return c >= 'A' && c <= 'Z';
   }
 
-  static inline bool IsMinorAxis(char c) {
+  static inline bool IsMinorAxis(LayoutAxis c) {
     return c >= 'a' && c <= 'z';
   }
 
   inline bool ConvertibleTo(const Layout &dst);
 
-  using iterator = std::vector<char>::const_iterator;
-  using reverse_iterator = std::vector<char>::const_reverse_iterator;
+  using iterator = std::vector<LayoutAxis>::const_iterator;
+  using reverse_iterator = std::vector<LayoutAxis>::const_reverse_iterator;
 
   /*! \return begin iterator */
   inline iterator begin() const {
@@ -83,34 +84,39 @@ class Layout {
     return reverse_iterator(layout_simplified.rend());
   }
 
-  inline size_t size() const {
+  inline size_t ndim() const {
     return layout_simplified.size();
   }
 
-  inline int PosMajor(char c) const {
+  inline int PosMajor(LayoutAxis c) const {
     CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
     char idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
     return major_position[idx];
   }
 
-  inline int PosMinor(char c) const {
+  inline int PosMinor(LayoutAxis c) const {
     CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
     char idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
     return minor_position[idx];
   }
 
-  inline uint32_t FactorSize(char axis) const {
+  inline uint32_t FactorSize(LayoutAxis axis) const {
     CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
     char idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
     return minor_factor[idx];
   }
 
+  inline const LayoutAxis operator[](size_t i) const {
+    return layout_simplified[i];
+  }
+
+  const std::string name;
+
  private:
-  const std::string layout;
   std::vector<int> major_position;
   std::vector<int> minor_position;
   std::vector<uint32_t> minor_factor;
-  std::vector<char> layout_simplified;
+  std::vector<LayoutAxis> layout_simplified;
 
 };
 

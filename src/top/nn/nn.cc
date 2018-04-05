@@ -565,7 +565,7 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
   return Array<Tensor> {
     topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
       std::vector<Expr> dst_to_src_indices;
-      for (char src_axis : src_layout) {
+      for (Layout::LayoutAxis src_axis : src_layout) {
         int dst_major_pos = dst_layout.PosMajor(src_axis);
         int dst_minor_pos = dst_layout.PosMinor(src_axis);
         uint32_t src_factor = src_layout.FactorSize(src_axis);

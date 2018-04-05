@@ -8,6 +8,7 @@
 
 #include <dmlc/logging.h>
 #include <dmlc/parameter.h>
+#include <nnvm/layout.h>
 #include <nnvm/top/nn.h>
 #include <string>
 #include <vector>
@@ -48,145 +49,36 @@ inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
     LOG(FATAL) << "cannot convert " << LayoutFlagStr(src_layout) << " to undefined layout";
   }
 
-  TShape dst;
-  if (src.ndim() == 3) {
-    dst = src;
-    switch (src_layout) {
-      case kNCW: break;
-      case kNWC: {
-        std::swap(dst[1], dst[2]);
-        break;
+  Layout slayout(LayoutFlagStr(src_layout));
+  Layout dlayout(LayoutFlagStr(dst_layout));
+
+  CHECK(slayout.ConvertibleTo(dlayout)) << "cannot convert from " << slayout.name
+                                        << " to " << dlayout.name;
+
+  TShape dst(dlayout.ndim());
+  for (size_t i = 0; i < slayout.ndim(); ++i) {
+    Layout::LayoutAxis src_axis = slayout[i];
+    if (Layout::IsMajorAxis(src_axis)) {
+      int dst_major_pos = dlayout.PosMajor(src_axis);
+      int dst_minor_pos = dlayout.PosMinor(src_axis);
+      int src_minor_pos = slayout.PosMinor(src_axis);
+      uint32_t src_factor = slayout.FactorSize(src_axis);
+      uint32_t dst_factor = dlayout.FactorSize(src_axis);
+
+      uint32_t src_axis_size = src[i];
+      if (src_minor_pos >= 0) {
+        CHECK_EQ(src_factor, src[src_minor_pos]) << "src shape " << src
+                                                 << " does not agree with layout " << slayout.name;
+        src_axis_size *= src_factor;
       }
-      default: {
-        LOG(FATAL) << "invalid layout for 3d shape " << LayoutFlagStr(src_layout);
-      }
-    }
-    switch (dst_layout) {
-      case kNCW: break;
-      case kNWC: {
-        std::swap(dst[1], dst[2]);
-        break;
-      }
-      default: {
-        LOG(FATAL) << "invalid layout for 3d shape " << LayoutFlagStr(dst_layout);
-      }
-    }
-  } else if (src.ndim() == 4) {
-    int ndim = (dst_layout == kNCHW3c || dst_layout == kNCHW16c || dst_layout == kNCHW8c) ? 5 : 4;
-    dst = TShape(ndim);
-    switch (src_layout) {
-      case kNCHW: {
-        dst[0] = src[0];
-        dst[1] = src[1];
-        dst[2] = src[2];
-        dst[3] = src[3];
-        break;
-      }
-      case kNHWC: {
-        dst[0] = src[0];
-        dst[2] = src[1];
-        dst[3] = src[2];
-        dst[1] = src[3];
-        break;
-      }
-      default: {
-        LOG(FATAL) << "invalid layout for 4d shape " << LayoutFlagStr(src_layout);
+
+      dst[dst_major_pos] = src_axis_size;
+      if (dst_minor_pos >= 0) {
+        CHECK(dst_factor > 0);
+        dst[dst_major_pos] /= dst_factor;
+        dst[dst_minor_pos] = dst_factor;
       }
     }
-    src = dst;
-    switch (dst_layout) {
-      case kNCHW: break;
-      case kNHWC: {
-        dst[1] = src[2];
-        dst[2] = src[3];
-        dst[3] = src[1];
-        break;
-      }
-      case kNCHW3c: {
-        dst[1] = dst[1] / 3;
-        dst[4] = 3;
-        break;
-      }
-      case kNCHW8c: {
-        dst[1] = dst[1] / 8;
-        dst[4] = 8;
-        break;
-      }
-      case kNCHW16c: {
-        dst[1] = dst[1] / 16;
-        dst[4] = 16;
-        break;
-      }
-      default: {
-        LOG(FATAL) << "invalid layout for 4d shape " << LayoutFlagStr(dst_layout);
-      }
-    }
-  } else if (src.ndim() == 5) {
-    if (src_layout == kNCHW16c || src_layout == kNCHW8c) {
-      int ndim = (dst_layout == kNCHW16c || dst_layout == kNCHW8c) ? 5 : 4;
-      dst = TShape(ndim);
-      dst[0] = src[0];
-      dst[1] = src[1] * src[4];
-      dst[2] = src[2];
-      dst[3] = src[3];
-      switch (dst_layout) {
-        case kNCHW: break;
-        case kNHWC: {
-          std::swap(dst[1], dst[3]);
-          std::swap(dst[1], dst[2]);
-          break;
-        }
-        case kNCHW3c: {
-          dst[1] = dst[1] / 3;
-          dst[4] = 3;
-          break;
-        }
-        case kNCHW8c: {
-          dst[1] = dst[1] / 8;
-          dst[4] = 8;
-          break;
-        }
-        case kNCHW16c: {
-          dst[1] = dst[1] / 16;
-          dst[4] = 16;
-          break;
-        }
-        default: {
-          LOG(FATAL) << "invalid layout for 5d shape " << LayoutFlagStr(dst_layout);
-        }
-      }
-    } else {
-      dst = src;
-      switch (src_layout) {
-        case kNCDHW: break;
-        case kNDHWC: {
-          dst[2] = src[1];
-          dst[3] = src[2];
-          dst[4] = src[3];
-          dst[1] = src[4];
-          break;
-        }
-        default: {
-          LOG(FATAL) << "invalid layout for 5d shape " << LayoutFlagStr(src_layout);
-        }
-      }
-      src = dst;
-      switch (dst_layout) {
-        case kNCDHW: break;
-        case kNDHWC: {
-          dst[1] = src[2];
-          dst[2] = src[3];
-          dst[3] = src[4];
-          dst[4] = src[1];
-          break;
-        }
-        default: {
-          LOG(FATAL) << "invalid layout for 5d shape " << LayoutFlagStr(dst_layout);
-        }
-      }
-    }
-  } else {
-    LOG(FATAL) << "no layout option for " << dst.ndim() << " dimensions";
   }
   return dst;
 }
