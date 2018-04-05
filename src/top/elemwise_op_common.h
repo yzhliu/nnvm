@@ -9,12 +9,9 @@
 #include <string>
 #include <vector>
 #include <utility>
-#include <nnvm/compiler/op_attr_types.h>
+#include <nnvm/layout.h>
 #include <nnvm/top/nn.h>
 #include "./op_common.h"
-
-using nnvm::compiler::TLayoutInfo;
-using nnvm::compiler::FTVMLayoutRequest;
 
 namespace nnvm {
 namespace top {
@@ -106,17 +103,18 @@ inline bool ElementWiseReduceType(const NodeAttrs& attrs,
 }
 
 template<int n_in, int n_out>
-inline bool ElemwiseLayout(const NodeAttrs& attrs,
-                           std::vector<TLayoutInfo> *in_layouts,
-                           std::vector<TLayoutInfo> *out_layouts) {
+inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
+                                std::vector<Layout> *in_layouts,
+                                const std::vector<Layout> *last_in_layouts,
+                                std::vector<Layout> *out_layouts) {
   const size_t in_size = (n_in == -1) ? in_layouts->size() : static_cast<size_t>(n_in);
   const size_t out_size = (n_out == -1) ? out_layouts->size() : static_cast<size_t>(n_out);
 
-  auto deduce = [&](TLayoutInfo *target, std::vector<TLayoutInfo> *vec,
+  auto deduce = [&](Layout *target, const std::vector<Layout> *vec,
                     size_t size, const char *name) {
     for (size_t i = 0; i < size; ++i) {
-      if (vec->at(i) != "__undef__") {
-        if (*target == "__undef__") {
+      if (vec->at(i).IsDefined()) {
+        if (!target->IsDefined()) {
           *target = vec->at(i);
         }
         CHECK_EQ(*target, vec->at(i))
@@ -127,36 +125,41 @@ inline bool ElemwiseLayout(const NodeAttrs& attrs,
     }
   };
 
-  TLayoutInfo in("__undef__"), out("__undef__");
+  Layout in, last_in, out;
   deduce(&in, in_layouts, in_size, "input");
+  deduce(&last_in, last_in_layouts, in_size, "input (last infer pass)");
   deduce(&out, out_layouts, out_size, "output");
 
-  if (out == "__undef__") out = in;
-  // else we copy out_layout to in_layout, and let LayoutTransform pass
+  if (!last_in.IsDefined()) last_in = in;
+  // else we copy in_layout produced by last infer pass to in_layout,
+  // and let LayoutTransform pass
   // to insert an layout_transform node to fix the input layout.
-  in = out;
+  else in = last_in;
 
-  auto write = [](std::vector<TLayoutInfo> *vec, TLayoutInfo& value, size_t size) {
+  CHECK(!out.IsDefined() || out == in);
+
+  auto write = [](std::vector<Layout> *vec, Layout& value, size_t size) {
     for (size_t i = 0; i < size; ++i) {
       vec->at(i) = value;
     }
   };
   write(in_layouts, in, in_size);
-  write(out_layouts, out, out_size);
+  write(out_layouts, in, out_size);
 
   return true;
 }
 
 template<int n_in, int n_out>
-inline bool ElemwiseLayoutAlwaysCopyToOutput(const NodeAttrs& attrs,
-                                             std::vector<TLayoutInfo> *in_layouts,
-                                             std::vector<TLayoutInfo> *out_layouts) {
+inline bool ElemwiseArbitraryLayout(const NodeAttrs& attrs,
+                                    std::vector<Layout> *in_layouts,
+                                    const std::vector<Layout> *last_in_layouts,
+                                    std::vector<Layout> *out_layouts) {
   const size_t in_size = (n_in == -1) ? in_layouts->size() : static_cast<size_t>(n_in);
   const size_t out_size = (n_out == -1) ? out_layouts->size() : static_cast<size_t>(n_out);
 
-  TLayoutInfo in("__undef__");
+  Layout in;
   for (size_t i = 0; i < in_size; ++i) {
-    if (in == "__undef__") in = in_layouts->at(i);
+    if (!in.IsDefined()) in = in_layouts->at(i);
     CHECK_EQ(in, in_layouts->at(i))
       << "Incompatible attr in node " << attrs.name << " at " << i
       << "-th input: expected " << in
@@ -170,48 +173,43 @@ inline bool ElemwiseLayoutAlwaysCopyToOutput(const NodeAttrs& attrs,
   return true;
 }
 
-inline bool ElemwiseBinaryLayout(const NodeAttrs& attrs,
-                                 std::vector<TLayoutInfo> *in_layouts,
-                                 std::vector<TLayoutInfo> *out_layouts) {
+inline bool ElemwiseBinaryKeepLeftLayout(const NodeAttrs& attrs,
+                                         std::vector<Layout> *in_layouts,
+                                         const std::vector<Layout> *last_in_layouts,
+                                         std::vector<Layout> *out_layouts) {
   CHECK_EQ(in_layouts->size(), 2U);
   CHECK_EQ(out_layouts->size(), 1U);
 
-  const TLayoutInfo& lhs = (*in_layouts)[0];
-  const TLayoutInfo& rhs = (*in_layouts)[1];
+  const Layout& lhs = (*in_layouts)[0];
+  const Layout& rhs = (*in_layouts)[1];
 
-  const TLayoutInfo& out = (*out_layouts)[0];
+  const Layout& out = (*out_layouts)[0];
 
-  if (lhs == "__undef__" && rhs == "__undef__") {
-    return out == "__undef__";
-  } else if (lhs == "__undef__") {
+  if (!lhs.IsDefined() && !rhs.IsDefined()) {
+    return !out.IsDefined();
+  } else if (!lhs.IsDefined()) {
     in_layouts->at(0) = rhs;
     out_layouts->at(0) = rhs;
     return true;
-  } else if (rhs == "__undef__") {
+  } else if (!rhs.IsDefined()) {
     in_layouts->at(1) = lhs;
     out_layouts->at(0) = lhs;
     return true;
   }
 
   if (lhs == rhs) {
-    // for same layout, we can always do broadcast
+    // for same layout, we can always do binary calculation
     // and pass the layout to next layer
     out_layouts->at(0) = lhs;
     return true;
   }
 
-  // prior to keep lhs layout
-  if (CheckLayoutConvertible(rhs, lhs)) {
-    in_layouts->at(1) = lhs;
-    out_layouts->at(0) = lhs;
-    return true;
-  } else if (CheckLayoutConvertible(lhs, rhs)) {
-    in_layouts->at(0) = rhs;
-    out_layouts->at(0) = rhs;
-    return true;
-  }
+  CHECK(lhs.Convertible(rhs)) << "Incompatible input layout in node " << attrs.name
+                              << ". lhs: " << lhs << ", rhs: " << rhs;
+  in_layouts->at(1) = lhs;
+  out_layouts->at(0) = lhs;
 
-  return false;
+  return true;
 }
 
 #define NNVM_REGISTER_ELEMWISE_UNARY_OP(name)                       \
@@ -220,8 +218,8 @@ inline bool ElemwiseBinaryLayout(const NodeAttrs& attrs,
   .set_num_outputs(1)                                               \
   .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)        \
   .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)           \
-  .set_attr<FTVMLayoutRequest>("FTVMLayoutRequest",                 \
-    ElemwiseLayoutAlwaysCopyToOutput<1, 1>)                         \
+  .set_attr<FInferLayout>("FInferLayout",                           \
+    ElemwiseArbitraryLayout<1, 1>)                                  \
   .set_attr<FInplaceOption>("FInplaceOption",                       \
     [](const NodeAttrs& attrs){                                     \
       return std::vector<std::pair<int, int> >{{0, 0}};             \
@@ -247,8 +245,8 @@ inline bool ElemwiseBinaryLayout(const NodeAttrs& attrs,
   .set_num_outputs(1)                                               \
   .set_attr<FInferShape>("FInferShape", ElemwiseShape<2, 1>)        \
   .set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)           \
-  .set_attr<FTVMLayoutRequest>("FTVMLayoutRequest",                 \
-    ElemwiseBinaryLayout)                                           \
+  .set_attr<FInferLayout>("FInferLayout",                           \
+    ElemwiseBinaryKeepLeftLayout)                                   \
   .set_attr<FInplaceOption>("FInplaceOption",                       \
     [](const NodeAttrs& attrs) {                                    \
       return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \
@@ -268,8 +266,8 @@ inline bool ElemwiseBinaryLayout(const NodeAttrs& attrs,
     ParamGetAttrDict<ElementWiseReduceParam>)                       \
   .set_attr<nnvm::FInferShape>("FInferShape",                       \
     ElementWiseReduceShape)                                         \
-  .set_attr<FTVMLayoutRequest>("FTVMLayoutRequest",                 \
-    ElemwiseLayout<1, 1>)                                           \
+  .set_attr<FInferLayout>("FInferLayout",                           \
+    ElemwiseFixedLayout<1, 1>)                                      \
   .set_attr<nnvm::FInferType>("FInferType", ElementWiseReduceType)  \
   .add_argument("args", "Symbol[]", "Positional input arguments")
 
@@ -286,8 +284,8 @@ inline bool ElemwiseBinaryLayout(const NodeAttrs& attrs,
         static_cast<int>(kFloat32));                                \
       return true;                                                  \
   })                                                                \
-  .set_attr<FTVMLayoutRequest>("FTVMLayoutRequest",                 \
-    ElemwiseLayout<1, 1>)                                           \
+  .set_attr<FInferLayout>("FInferLayout",                           \
+    ElemwiseFixedLayout<1, 1>)                                      \
   .set_attr<FGradient>(                                             \
     "FGradient", [](const NodePtr& n,                               \
                     const std::vector<NodeEntry>& ograds) {         \

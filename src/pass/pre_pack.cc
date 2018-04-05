@@ -1,5 +1,6 @@
 #include <nnvm/pass.h>
 #include <nnvm/op_attr_types.h>
+#include <nnvm/layout.h>
 #include <algorithm>
 #include <functional>
 #include <nnvm/compiler/op_attr_types.h>
@@ -7,16 +8,9 @@
 #include "../compiler/graph_transform.h"
 #include <tvm/tvm.h>
 
-using nnvm::compiler::TLayoutInfo;
-
 namespace nnvm {
 namespace pass {
 namespace {
-
-const TLayoutInfo& GetDefaultLayout() {
-  static TLayoutInfo default_layout = "__undef__";
-  return default_layout;
-}
 
 // convert from type flag to tvm type.
 tvm::Type GetTVMType(int type_flag) {
@@ -73,12 +67,12 @@ Graph PrePack(const Graph& src) {
   const DTypeVector& dtype_vec = src.GetAttr<DTypeVector>("dtype");
   const IndexedGraph& idx_graph = src.indexed_graph();
 
-  std::unordered_map<const Node*, std::vector<TLayoutInfo> > new_layouts;
+  std::unordered_map<const Node*, std::vector<Layout> > new_layouts;
 
   auto transform = [&](uint32_t nid, const NodePtr& n, std::vector<NodeEntry>* ret) {
     if (src.HasAttr("layout")) {
       // save the original layouts for further transform.
-      const auto& layouts = src.GetAttr<std::vector<TLayoutInfo> >("layout");
+      const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
       if (new_layouts.count(n.get())) {
         auto iter = new_layouts.find(n.get());
         for (uint32_t i = 0; i < n->num_outputs(); ++i) {
@@ -86,7 +80,7 @@ Graph PrePack(const Graph& src) {
           iter->second.at(i) = layout;
         }
       } else {
-        std::vector<TLayoutInfo> output_layout;
+        std::vector<Layout> output_layout;
         for (uint32_t i = 0; i < n->num_outputs(); ++i) {
           const auto &layout = layouts[idx_graph.entry_id(nid, i)];
           output_layout.emplace_back(layout);
@@ -127,7 +121,7 @@ Graph PrePack(const Graph& src) {
   if (src.HasAttr("layout")) {
     // restore the layouts to return graph
     const auto& ret_idx = ret.indexed_graph();
-    std::vector<TLayoutInfo> ret_layouts(ret_idx.num_node_entries(), GetDefaultLayout());
+    std::vector<Layout> ret_layouts(ret_idx.num_node_entries(), Layout::Undef());
     for (uint32_t nid = 0; nid < ret_idx.num_nodes(); ++nid) {
       const auto& inode = ret_idx[nid];
       const auto& layout_iter = new_layouts.find(inode.source);

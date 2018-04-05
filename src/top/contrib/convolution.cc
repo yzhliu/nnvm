@@ -151,14 +151,15 @@ NNVM_REGISTER_OP(_contrib_conv2d_nchw_kernel_packed)
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DNCHWKernelPackedParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DNCHWKernelPrePackInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FTVMLayoutRequest>(
-"FTVMLayoutRequest", [](const NodeAttrs& attrs,
-        std::vector<TLayoutInfo> *ilayouts,
-        std::vector<TLayoutInfo> *olayouts) {
+.set_attr<FInferLayout>(
+"FInferLayout", [](const NodeAttrs& attrs,
+        std::vector<Layout> *ilayouts,
+        const std::vector<Layout> *last_ilayouts,
+        std::vector<Layout> *olayouts) {
 // TODO: decide arg layout. now we assume arg layout has been correctly converted.
-ilayouts->at(0) = "NCHW";
+ilayouts->at(0).parse("NCHW");
 CHECK_EQ(olayouts->size(), 1U);
-olayouts->at(0) = "NCHW";
+olayouts->at(0).parse("NCHW");
 return true;
 })
 .set_num_outputs(1)

@@ -82,7 +82,7 @@ NNVM_REGISTER_OP(max_pool2d)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", Pool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -156,7 +156,7 @@ NNVM_REGISTER_OP(avg_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Pool2DParam>)
 .set_attr<FInferShape>("FInferShape", Pool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -223,10 +223,11 @@ NNVM_REGISTER_OP(global_max_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<GlobalPool2DParam>)
 .set_attr<FInferShape>("FInferShape", GlobalPool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>(
-  "FTVMLayoutRequest", [](const NodeAttrs& attrs,
-                          std::vector<TLayoutInfo> *ilayouts,
-                          std::vector<TLayoutInfo> *olayouts) {
+.set_attr<FInferLayout>(
+  "FInferLayout", [](const NodeAttrs& attrs,
+                     std::vector<Layout> *ilayouts,
+                     const std::vector<Layout> *last_ilayouts,
+                     std::vector<Layout> *olayouts) {
     const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);
@@ -264,10 +265,11 @@ NNVM_REGISTER_OP(global_avg_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<GlobalPool2DParam>)
 .set_attr<FInferShape>("FInferShape", GlobalPool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>(
-  "FTVMLayoutRequest", [](const NodeAttrs& attrs,
-                          std::vector<TLayoutInfo> *ilayouts,
-                          std::vector<TLayoutInfo> *olayouts) {
+.set_attr<FInferLayout>(
+  "FInferLayout", [](const NodeAttrs& attrs,
+                     std::vector<Layout> *ilayouts,
+                     const std::vector<Layout> *last_ilayouts,
+                     std::vector<Layout> *olayouts) {
     const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);

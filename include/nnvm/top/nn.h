@@ -73,7 +73,7 @@ inline bool CheckLayoutConvertible(const std::string& from, const std::string& t
   if (from == "__undef__" || to == "__undef__") {
     return false;
   }
-  return nnvm::Layout(from).ConvertibleTo(to);
+  return nnvm::Layout(from).Convertible(to);
 }
 
 struct DenseParam : public dmlc::Parameter<DenseParam> {

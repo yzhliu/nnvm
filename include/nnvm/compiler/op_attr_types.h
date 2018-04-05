@@ -79,20 +79,6 @@ using FTVMWeightPrepack = std::function<
          const SymbolArray& inputs,
          const Array<Tensor>& tinfos)>;
 
-/*! \brief Layout Information about an entry */
-using TLayoutInfo = std::string;
-
-/*!
- * \brief The producer consumer function of node layout
- * \param attrs The attribute of the node.
- * \param ilayouts The input layouts that the node request.
- * \param olayouts The output layouts that the node produce.
- * \return bool The success flag.
- */
-using FTVMLayoutRequest = std::function<bool (const NodeAttrs& attrs,
-                                              std::vector<TLayoutInfo> *ilayouts,
-                                              std::vector<TLayoutInfo> *olayouts)>;
-
 /*!
  * \brief Transform from normal operator to vectorized operator
  * \param node The source node.

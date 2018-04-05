@@ -105,7 +105,7 @@ def set_layout_inputs(g, layout):
         list_layout = [layout] * len(g.index.input_names)
     else:
         raise ValueError("Input layout must be str or dict")
-    g._set_json_attr("layout_inputs", list_layout, 'list_str')
+    g._set_json_attr("layout_inputs", list_layout, 'list_layout')
     return g
 
 _move_out_module = tvm.get_global_func("nnvm.graph._move_module")

@@ -8,6 +8,7 @@
 #include <tvm/packed_func_ext.h>
 #include <nnvm/op.h>
 #include <nnvm/node.h>
+#include <nnvm/layout.h>
 #include <nnvm/op_attr_types.h>
 #include <nnvm/compiler/op_attr_types.h>
 #include <nnvm/top/nn.h>
@@ -26,7 +27,6 @@ using tvm::Expr;
 using tvm::Tensor;
 using tvm::Array;
 using nnvm::compiler::FTVMCompute;
-using nnvm::compiler::FTVMLayoutRequest;
 
 // dense
 DMLC_REGISTER_PARAMETER(DenseParam);
@@ -86,7 +86,7 @@ If ``use_bias`` is set to be false, then the ``bias`` term is ignored.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<DenseParam>)
 .set_attr<FInferShape>("FInferShape", DenseInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, -1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -179,7 +179,7 @@ NNVM_REGISTER_OP(dropout)
 .set_num_outputs(2)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 2>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 2>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, -1>)
 .set_attr<FNumVisibleOutputs>("FNumVisibleOutputs", [](const NodeAttrs& attrs) {
     return 1;
   })
@@ -262,7 +262,7 @@ axis to be the last item in the input shape.
 .add_arguments(BatchNormParam::__FIELDS__())
 .set_attr_parser(ParamParser<BatchNormParam>)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<BatchNormParam>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, -1>)
 .set_num_inputs(5)
 .set_num_outputs(3)
 .set_attr<FInferShape>("FInferShape", BatchNormInferShape)
@@ -300,7 +300,7 @@ NNVM_REGISTER_OP(softmax)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<-1, -1>)
 .set_support_level(1)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
@@ -358,7 +358,7 @@ NNVM_REGISTER_OP(log_softmax)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<-1, -1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -418,7 +418,7 @@ NNVM_REGISTER_OP(leaky_relu)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayoutAlwaysCopyToOutput<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<-1, -1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -482,7 +482,7 @@ NNVM_REGISTER_OP(pad)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", PadInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>("FTVMLayoutRequest", ElemwiseLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -534,10 +534,11 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
 .set_attr_parser(ParamParser<LayoutTransformParam>)
 .set_attr<FInferShape>("FInferShape", LayoutTransformInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMLayoutRequest>(
-  "FTVMLayoutRequest", [](const NodeAttrs& attrs,
-                          std::vector<TLayoutInfo> *ilayouts,
-                          std::vector<TLayoutInfo> *olayouts) {
+.set_attr<FInferLayout>(
+  "FInferLayout", [](const NodeAttrs& attrs,
+                     std::vector<Layout> *ilayouts,
+                     const std::vector<Layout> *last_ilayouts,
+                     std::vector<Layout> *olayouts) {
     const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);
@@ -559,7 +560,7 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
   Layout src_layout(LayoutFlagStr(param.src_layout));
   Layout dst_layout(LayoutFlagStr(param.dst_layout));
 
-  CHECK(src_layout.ConvertibleTo(dst_layout)) << "cannot convert from " << param.src_layout
+  CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
                                               << " to " << param.dst_layout;
 
   return Array<Tensor> {

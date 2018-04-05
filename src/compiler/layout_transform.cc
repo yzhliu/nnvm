@@ -7,43 +7,36 @@
 #include <nnvm/op_attr_types.h>
 #include <nnvm/graph_attr_types.h>
 #include <nnvm/pass.h>
-#include <nnvm/compiler/op_attr_types.h>
-#include <nnvm/compiler/contrib_op_param.h>
-#include "../top/elemwise_op_common.h"
+#include <nnvm/layout.h>
 
 namespace nnvm {
 namespace compiler {
 
-const TLayoutInfo& GetDefaultLayout() {
-  static TLayoutInfo default_layout = "__undef__";
-  return default_layout;
-}
-
-nnvm::NodePtr CreateLayoutTransformNode(const std::string& src,
-                                        const std::string& dst) {
+nnvm::NodePtr CreateLayoutTransformNode(const Layout& src,
+                                        const Layout& dst) {
   static const nnvm::Op* trans_op = nnvm::Op::Get("__layout_transform__");
   static int count = 0;
   nnvm::NodePtr n = nnvm::Node::Create();
   n->attrs.op = trans_op;
-  n->attrs.name = src + "_to_" + dst + std::to_string(count++);
-  n->attrs.dict["src_layout"] = src;
-  n->attrs.dict["dst_layout"] = dst;
+  n->attrs.name = src.name() + "_to_" + dst.name() + std::to_string(count++);
+  n->attrs.dict["src_layout"] = src.name();
+  n->attrs.dict["dst_layout"] = dst.name();
   n->op()->attr_parser(&(n->attrs));
   return n;
 }
 
-using LayoutAttrDict = std::unordered_map<const Node*, std::vector<TLayoutInfo> >;
+using LayoutAttrDict = std::unordered_map<const Node*, std::vector<Layout> >;
 
 /*!
  * \brief A simple layout transform pass that will
  *  insert layout transform nodes automatically.
  */
 nnvm::Graph LayoutTransform(nnvm::Graph src) {
-  static auto& op_layout_request =
-    nnvm::Op::GetAttr<FTVMLayoutRequest>("FTVMLayoutRequest");
+  static auto& op_infer_layout =
+    nnvm::Op::GetAttr<FInferLayout>("FInferLayout");
 
-  const std::vector<TLayoutInfo>& input_layouts =
-      src.GetAttr<std::vector<TLayoutInfo> >("layout_inputs");
+  const std::vector<Layout>& input_layouts =
+      src.GetAttr<std::vector<Layout> >("layout_inputs");
 
   const IndexedGraph& idx = src.indexed_graph();
   std::vector<nnvm::NodePtr> mirror_vec(idx.num_nodes(), nullptr);
@@ -60,14 +53,14 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
       auto input_iter = std::find(
         idx.input_nodes().cbegin(), idx.input_nodes().cend(), nid);
       CHECK(input_iter != idx.input_nodes().cend());
-      size_t input_id = std::distance(idx.input_nodes().cbegin(), input_iter);
+      long input_id = std::distance(idx.input_nodes().cbegin(), input_iter);
       new_layouts[new_node.get()] = { input_layouts[input_id] };
       mirror_vec[nid] = new_node;
       continue;
     }
 
     // set up output and input layouts
-    std::vector<TLayoutInfo> request_ilayouts(new_node->num_inputs(), GetDefaultLayout());
+    std::vector<Layout> request_ilayouts(new_node->num_inputs(), Layout::Undef());
     for (size_t i = 0; i < new_node->num_inputs(); ++i) {
       const IndexedGraph::NodeEntry& input_entry = inode.inputs[i];
       const NodePtr& new_input_node = mirror_vec[input_entry.node_id];
@@ -79,27 +72,33 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
       request_ilayouts[i] = layouts_iter->second[input_entry.index];
     }
     // layouts produced by previous node.
-    std::vector<TLayoutInfo> produce_ilayouts(request_ilayouts);
-    // fill outputs by previous pass of LayoutTransform (if apply)
-    std::vector<TLayoutInfo> produce_olayouts(new_node->num_outputs(), GetDefaultLayout());
+    std::vector<Layout> produce_ilayouts(request_ilayouts);
+    // input layouts from last pass of LayoutTransform (if apply)
+    std::vector<Layout> last_request_ilayouts(new_node->num_inputs(), Layout::Undef());
+    // fill outputs by last pass of LayoutTransform (if apply)
+    std::vector<Layout> produce_olayouts(new_node->num_outputs(), Layout::Undef());
     if (src.HasAttr("layout")) {
-      const auto& layouts = src.GetAttr<std::vector<TLayoutInfo> >("layout");
+      const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
       for (uint32_t i = 0; i < new_node->num_outputs(); ++i) {
         produce_olayouts[i] = layouts[idx.entry_id(nid, i)];
       }
+      for (uint32_t i = 0; i < new_node->num_inputs(); ++i) {
+        last_request_ilayouts[i] = layouts[idx.entry_id(inode.inputs[i])];
+      }
     }
 
-    const auto& flayout = op_layout_request[new_node->op()];
-    CHECK(flayout != nullptr) << "Attribute FTVMLayoutRequest"
+    const auto& flayout = op_infer_layout[new_node->op()];
+    CHECK(flayout != nullptr) << "Attribute FInferLayout"
                               << " is not registered by op " << inode.source->op()->name
                               << " we are not able to complete layout transform.";
-    CHECK(flayout(new_node->attrs, &request_ilayouts, &produce_olayouts))
-        << "Layout request fail";
+    CHECK(flayout(new_node->attrs, &request_ilayouts, &last_request_ilayouts, &produce_olayouts))
+        << "Layout infer fail";
     CHECK_EQ(request_ilayouts.size(), new_node->num_inputs());
     CHECK_EQ(produce_olayouts.size(), new_node->num_outputs());
+    // TODO: check layout factors are decided
 
     // update new layouts
-    new_layouts[new_node.get()] = produce_olayouts;
+    new_layouts[new_node.get()] = std::move(produce_olayouts);
 
     for (uint32_t i = 0; i < inode.inputs.size(); ++i) {
       const auto& e = inode.inputs[i];
@@ -107,11 +106,11 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
       new_node->inputs[i] = nnvm::NodeEntry{in, e.index, e.version};
 
       // insert layout_transform if necessary
-      TLayoutInfo produce = produce_ilayouts[i];
-      TLayoutInfo request = request_ilayouts[i];
-      if (produce != request && produce != "__undef__") {
+      const Layout& produce = produce_ilayouts[i];
+      const Layout& request = request_ilayouts[i];
+      if (produce != request && produce.IsDefined()) {
         nnvm::NodePtr tnode = CreateLayoutTransformNode(produce, request);
-        tnode->attrs.name = idx[e.node_id].source->attrs.name + "_" + request;
+        tnode->attrs.name = idx[e.node_id].source->attrs.name + "_" + request.name();
         tnode->inputs.emplace_back(new_node->inputs[i]);
         nnvm::NodeEntry tnode_output{tnode, 0, 0};
         new_node->inputs[i] = tnode_output;
@@ -131,13 +130,13 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
   ret.outputs = outputs;
   // restore the layouts to return graph
   const auto& ret_idx = ret.indexed_graph();
-  std::vector<TLayoutInfo> ret_layouts(ret_idx.num_node_entries(), GetDefaultLayout());
+  std::vector<Layout> ret_layouts(ret_idx.num_node_entries(), Layout::Undef());
   for (uint32_t nid = 0; nid < ret_idx.num_nodes(); ++nid) {
     const auto& inode = ret_idx[nid];
     const auto& layout_iter = new_layouts.find(inode.source);
     if (layout_iter != new_layouts.end()) {
       for (uint32_t i = 0; i < inode.source->num_outputs(); ++i) {
-        ret_layouts[ret_idx.entry_id(nid, i)] = layout_iter->second[i];
+        ret_layouts[ret_idx.entry_id(nid, i)] = std::move(layout_iter->second[i]);
       }
     }
   }
@@ -157,6 +156,8 @@ NNVM_REGISTER_PASS(LayoutTransform)
 .set_body(LayoutTransform)
 .provide_graph_attr("layout")
 .set_change_graph(true);
+
+DMLC_JSON_ENABLE_ANY(LayoutVector, list_layout);
 
 }  // namespace compiler
 }  // namespace nnvm

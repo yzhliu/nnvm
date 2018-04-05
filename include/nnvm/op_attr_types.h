@@ -13,6 +13,7 @@
 #include "./base.h"
 #include "./node.h"
 #include "./tuple.h"
+#include "./layout.h"
 
 namespace nnvm {
 
@@ -175,6 +176,25 @@ using FSetInputVarAttrOnCompose = std::function<void(
     const NodeAttrs& attrs,
     NodePtr var,
     const int index)>;
+
+/*!
+ * \brief Inference function of node layout
+ * \param attrs The attribute of the node.
+ * \param ilayouts Given the input layouts produced by ancestor nodes,
+ *                 it should be filled by layouts that the node requests.
+ *                 If the requested layout is different from what ancestor produces,
+ *                 a __layout_transform__ operator will be inserted automatically.
+ * \param last_ilayouts The input layouts requested by the node
+ *                      at the last infer pass (if any).
+ * \param olayouts Given the output layouts the node produced at the last infer pass (if any),
+ *                 it should be filled by layouts that the node produces.
+ * \return whether all layouts are inferred.
+ */
+using FInferLayout = std::function<bool(
+    const NodeAttrs& attrs,
+    std::vector<Layout> *ilayouts,
+    const std::vector<Layout> *last_ilayouts,
+    std::vector<Layout> *olayouts)>;
 
 }  // namespace nnvm
 

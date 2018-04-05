@@ -52,8 +52,8 @@ inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
   Layout slayout(LayoutFlagStr(src_layout));
   Layout dlayout(LayoutFlagStr(dst_layout));
 
-  CHECK(slayout.ConvertibleTo(dlayout)) << "cannot convert from " << slayout.name
-                                        << " to " << dlayout.name;
+  CHECK(slayout.Convertible(dlayout)) << "cannot convert from " << slayout
+                                      << " to " << dlayout;
 
   TShape dst(dlayout.ndim());
   for (size_t i = 0; i < slayout.ndim(); ++i) {
@@ -68,7 +68,7 @@ inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
       uint32_t src_axis_size = src[i];
       if (src_minor_pos >= 0) {
         CHECK_EQ(src_factor, src[src_minor_pos]) << "src shape " << src
-                                                 << " does not agree with layout " << slayout.name;
+                                                 << " does not agree with layout " << slayout;
         src_axis_size *= src_factor;
       }
 

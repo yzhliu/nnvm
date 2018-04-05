@@ -5,6 +5,7 @@
  */
 #include <nnvm/op.h>
 #include <nnvm/node.h>
+#include <nnvm/layout.h>
 #include <nnvm/op_attr_types.h>
 #include <nnvm/top/nn.h>
 #include <tvm/tensor.h>
@@ -20,7 +21,6 @@
 using tvm::Tensor;
 using tvm::Array;
 using nnvm::compiler::FTVMCompute;
-using nnvm::compiler::FTVMLayoutRequest;
 
 namespace nnvm {
 namespace top {
@@ -129,12 +129,13 @@ a bias vector is created and added to the outputs.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FTVMLayoutRequest>(
-  "FTVMLayoutRequest", [](const NodeAttrs& attrs,
-                          std::vector<TLayoutInfo> *ilayouts,
-                          std::vector<TLayoutInfo> *olayouts) {
+.set_attr<FInferLayout>(
+    "FInferLayout", [](const NodeAttrs& attrs,
+                       std::vector<Layout> *ilayouts,
+                       const std::vector<Layout> *last_ilayouts,
+                       std::vector<Layout> *olayouts) {
   const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
-  const TLayoutInfo& out_layout = LayoutFlagStr(param.layout);
+  const Layout out_layout(LayoutFlagStr(param.layout));
   if (param.use_bias) {
     CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
   } else {
@@ -143,8 +144,7 @@ a bias vector is created and added to the outputs.
   CHECK_EQ(olayouts->size(), 1U);
   olayouts->at(0) = out_layout;
   for (uint32_t i = 0; i < ilayouts->size(); ++i) {
-    if (ilayouts->at(i) != "__undef__" &&
-        !CheckLayoutConvertible(ilayouts->at(i), out_layout)) {
+    if (ilayouts->at(i).IsDefined() && !ilayouts->at(i).Convertible(out_layout)) {
       return false;
     }
     ilayouts->at(i) = out_layout;
@@ -289,48 +289,24 @@ NNVM_REGISTER_OP(conv2d_nChwc)
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DNCHWcParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DNoPackInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FTVMLayoutRequest>(
-"FTVMLayoutRequest", [](const NodeAttrs& attrs,
-                        std::vector<TLayoutInfo> *ilayouts,
-                        std::vector<TLayoutInfo> *olayouts) {
+.set_attr<FInferLayout>(
+"FInferLayout", [](const NodeAttrs& attrs,
+                   std::vector<Layout> *ilayouts,
+                   const std::vector<Layout> *last_ilayouts,
+                   std::vector<Layout> *olayouts) {
   const Conv2DNCHWcParam& param = nnvm::get<Conv2DNCHWcParam>(attrs.parsed);
-  TLayoutInfo in_layout;
-  TLayoutInfo out_layout;
-  switch (param.ic_bn) {
-    case 3:
-      in_layout = "NCHW3c";
-      break;
-    case 8:
-      in_layout = "NCHW8c";
-      break;
-    case 16:
-    default:
-      in_layout = "NCHW16c";
-      break;
-  }
-  switch (param.oc_bn) {
-    case 3:
-      out_layout = "NCHW3c";
-      break;
-    case 8:
-      out_layout = "NCHW8c";
-      break;
-    case 16:
-    default:
-      out_layout = "NCHW16c";
-      break;
-  }
-
+  Layout in_layout("NCHW" + std::to_string(param.ic_bn) + "c");
+  Layout out_layout("NCHW" + std::to_string(param.oc_bn) + "c");
   if (param.use_bias) {
     CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
   } else {
     CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
   }
   // TODO: decide arg layout. now we assume arg layout has been correctly converted.
-  ilayouts->at(0) = in_layout;
+  ilayouts->at(0) = std::move(in_layout);
 
   CHECK_EQ(olayouts->size(), 1U);
-  olayouts->at(0) = out_layout;
+  olayouts->at(0) = std::move(out_layout);
 
   return true;
 })
