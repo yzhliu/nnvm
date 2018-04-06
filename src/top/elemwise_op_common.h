@@ -136,7 +136,9 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
   // to insert an layout_transform node to fix the input layout.
   else in = last_in;
 
-  CHECK(!out.IsDefined() || out == in);
+  if (!in.IsDefined()) in = out;
+  CHECK(!out.IsDefined() || out == in)
+    << "Input layout " << in << " does not match output layout " << out;
 
   auto write = [](std::vector<Layout> *vec, Layout& value, size_t size) {
     for (size_t i = 0; i < size; ++i) {

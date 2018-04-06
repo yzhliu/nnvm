@@ -102,7 +102,8 @@ def set_layout_inputs(g, layout):
         list_layout = [
             layout.get(name, "__undef__") for name in g.index.input_names]
     elif isinstance(layout, str):
-        list_layout = [layout] * len(g.index.input_names)
+        list_layout = ["__undef__"] * len(g.index.input_names)
+        list_layout[0] = layout
     else:
         raise ValueError("Input layout must be str or dict")
     g._set_json_attr("layout_inputs", list_layout, 'list_layout')

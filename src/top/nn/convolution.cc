@@ -32,8 +32,24 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape>* in_shape,
                              std::vector<TShape>* out_shape) {
   static const Layout kNCHW("NCHW");
+  static const Layout kOIHW("OIHW");
+
   const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
-  const Layout layout(param.layout);
+
+  const Layout in_layout(param.layout);
+  const Layout kernel_layout(param.kernel_layout);
+  CHECK(in_layout.Convertible(kNCHW))
+    << "Conv only support input layouts that are convertible from NCHW."
+    << " But got " << in_layout;
+  CHECK(kernel_layout.Convertible(kOIHW))
+    << "Conv only support kernel layouts that are convertible from OIHW."
+    << " But got "<< kernel_layout;
+
+  Layout out_layout(param.out_layout);
+  if (!out_layout.IsDefined()) out_layout = in_layout;
+  CHECK(out_layout.Convertible(kNCHW))
+    << "Conv only support output layouts that are convertible from NCHW."
+    << " But got " << out_layout;
 
   if (param.use_bias) {
     CHECK_EQ(in_shape->size(), 3U) << "Input:[data, weight, bias]";
@@ -44,7 +60,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
 
   TShape dshape = in_shape->at(0);
   if (dshape.ndim() == 0) return false;
-  dshape = ConvertLayout(dshape, layout, kNCHW);
+  dshape = ConvertLayout(dshape, in_layout, kNCHW);
 
   CHECK_EQ(dshape.ndim(), 4U) << "Input data should be 4D";
   CHECK_EQ(param.kernel_size.ndim(), 2U);
@@ -62,13 +78,19 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                  param.kernel_size[0],
                  param.kernel_size[1]});
 
-  wshape = ConvertLayout(wshape, kNCHW, layout);
+  wshape = ConvertLayout(wshape, kOIHW, kernel_layout);
   wshape[0] *= param.groups;
 
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
   if (param.use_bias) {
-    NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape,
-                            Conv2DParam::kBias, TShape({param.channels}));
+    static const Layout default_bias_layout("C");
+    TShape bias_shape({param.channels});
+    auto oc_block = out_layout.FactorSize('C');
+    if (oc_block > 0) {
+      bias_shape = ConvertLayout(bias_shape, default_bias_layout,
+                                 Layout("C" + std::to_string(oc_block) + "c"));
+    }
+    NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kBias, bias_shape);
   }
   // dilation
   dim_t dilated_ksize_y = 1 + (param.kernel_size[0] - 1) * param.dilation[0];
@@ -80,11 +102,11 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
   if (dshape[3] != 0) {
     oshape[3] = (dshape[3] + param.padding[1] * 2 - dilated_ksize_x) / param.strides[1] + 1;
   }
-  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, ConvertLayout(oshape, kNCHW, layout));
+  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, ConvertLayout(oshape, kNCHW, out_layout));
   // Perform incomplete shape inference. Fill in the missing values in data shape.
   // 1) We can always fill in the batch_size.
   // 2) We can back-calculate the input height/width if the corresponding stride is 1.
-  oshape = ConvertLayout((*out_shape)[0], layout, kNCHW);
+  oshape = ConvertLayout((*out_shape)[0], out_layout, kNCHW);
   dshape[0] = oshape[0];
   if (oshape[2] && param.strides[0] == 1) {
     dshape[2] = oshape[2] + dilated_ksize_y - 1 - 2 * param.padding[0];
@@ -93,7 +115,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
     dshape[3] = oshape[3] + dilated_ksize_x - 1 - 2 * param.padding[1];
   }
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kData,
-                          ConvertLayout(dshape, kNCHW, param.layout));
+                          ConvertLayout(dshape, kNCHW, in_layout));
   // Check whether the kernel sizes are valid
   if (dshape[2] != 0) {
     CHECK_LE(dilated_ksize_y, dshape[2] + 2 * param.padding[0])
@@ -103,6 +125,40 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
     CHECK_LE(dilated_ksize_x, dshape[3] + 2 * param.padding[1])
         << "kernel size exceed input";
   }
+  return true;
+}
+
+inline bool Conv2DInferLayout(const NodeAttrs& attrs,
+                              std::vector<Layout> *ilayouts,
+                              const std::vector<Layout> *last_ilayouts,
+                              std::vector<Layout> *olayouts) {
+  const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
+
+  const Layout in_layout(param.layout);
+  Layout out_layout(param.out_layout);
+  if (!out_layout.IsDefined()) out_layout = in_layout;
+
+  const Layout kernel_layout(param.kernel_layout);
+  if (param.use_bias) {
+    CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
+    ilayouts->at(0) = in_layout;
+    ilayouts->at(1) = kernel_layout;
+    // automatically decide bias layout
+    std::string bias_layout("C");
+    auto oc_block = out_layout.FactorSize('C');
+    if (oc_block > 0) {
+      bias_layout = bias_layout + std::to_string(oc_block) + "c";
+    }
+    ilayouts->at(2) = bias_layout;
+  } else {
+    CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
+    ilayouts->at(0) = in_layout;
+    ilayouts->at(1) = kernel_layout;
+  }
+
+  CHECK_EQ(olayouts->size(), 1U);
+  olayouts->at(0) = out_layout;
+
   return true;
 }
 
@@ -131,28 +187,7 @@ a bias vector is created and added to the outputs.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>(
-    "FInferLayout", [](const NodeAttrs& attrs,
-                       std::vector<Layout> *ilayouts,
-                       const std::vector<Layout> *last_ilayouts,
-                       std::vector<Layout> *olayouts) {
-  const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
-  const Layout out_layout(param.layout);
-  if (param.use_bias) {
-    CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
-  } else {
-    CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
-  }
-  CHECK_EQ(olayouts->size(), 1U);
-  olayouts->at(0) = out_layout;
-  for (uint32_t i = 0; i < ilayouts->size(); ++i) {
-    if (ilayouts->at(i).IsDefined() && !ilayouts->at(i).Convertible(out_layout)) {
-      return false;
-    }
-    ilayouts->at(i) = out_layout;
-  }
-  return true;
-})
+.set_attr<FInferLayout>("FInferLayout", Conv2DInferLayout)
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DParam>)
 .set_support_level(2)
@@ -166,154 +201,21 @@ a bias vector is created and added to the outputs.
 });
 
 
-struct Conv2DNCHWcParam : public dmlc::Parameter<Conv2DNCHWcParam> {
-  int channels;
-  TShape kernel_size;
-  TShape strides;
-  TShape padding;
-  TShape dilation;
-  int groups;
-  bool use_bias;
-  int ic_bn;
-  int oc_bn;
-
-  DMLC_DECLARE_PARAMETER(Conv2DNCHWcParam) {
-    DMLC_DECLARE_FIELD(channels)
-    .describe("The dimensionality of the output space"
-              "i.e. the number of output channels in the convolution.");
-    DMLC_DECLARE_FIELD(kernel_size)
-    .describe("Specifies the dimensions of the convolution window.");
-    DMLC_DECLARE_FIELD(strides).set_default(TShape({1, 1}))
-    .describe("Specifies the strides of the convolution.");
-    DMLC_DECLARE_FIELD(padding).set_default(TShape({0, 0}))
-    .describe("If padding is non-zero, then the input is implicitly zero-padded"
-              "on both sides for padding number of points");
-    DMLC_DECLARE_FIELD(dilation).set_default(TShape({1, 1}))
-    .describe("Specifies the dilation rate to use for dilated convolution.");
-    DMLC_DECLARE_FIELD(groups).set_default(1)
-    .describe("Controls the connections between inputs and outputs."
-              "At groups=1, all inputs are convolved to all outputs."
-              "At groups=2, the operation becomes equivalent to having two convolution"
-              "layers side by side, each seeing half the input channels, and producing"
-              "half the output channels, and both subsequently concatenated.");
-    DMLC_DECLARE_FIELD(use_bias).set_default(true)
-    .describe("Whether the layer uses a bias vector.");
-    DMLC_DECLARE_FIELD(ic_bn).set_default(16)
-    .describe("Input channel block size.");
-    DMLC_DECLARE_FIELD(oc_bn).set_default(16)
-    .describe("Output channel block size.");
-  }
-  // constants
-  static const constexpr int kData = 0;
-  static const constexpr int kWeight = 1;
-  static const constexpr int kBias = 2;
-};
-DMLC_REGISTER_PARAMETER(Conv2DNCHWcParam);
-
-inline bool Conv2DNoPackInferShape(const nnvm::NodeAttrs& attrs,
-                                   std::vector<TShape>* in_shape,
-                                   std::vector<TShape>* out_shape) {
-  const Conv2DNCHWcParam& param = nnvm::get<Conv2DNCHWcParam>(attrs.parsed);
-  if (param.use_bias) {
-    CHECK_EQ(in_shape->size(), 3U) << "Input:[data, weight, bias]";
-  } else {
-    CHECK_EQ(in_shape->size(), 2U) << "Input:[data, weight]";
-  }
-  CHECK_EQ(out_shape->size(), 1U);
-
-  TShape dshape = in_shape->at(0);
-  if (dshape.ndim() == 0) return false;
-
-  CHECK_EQ(dshape.ndim(), 5U) << "Input data should be 5D";
-  CHECK_EQ(param.kernel_size.ndim(), 2U);
-  CHECK_EQ(param.strides.ndim(), 2U)
-    << "incorrect stride size: " << param.strides;
-  CHECK_EQ(param.dilation.ndim(), 2U)
-    << "incorrect dilate size: " << param.dilation;
-  CHECK_EQ(dshape[1] % param.groups, 0U)
-    << "input channels must divide group size";
-  CHECK_EQ(param.channels % param.groups, 0U)
-    << "output channels must divide group size";
-
-//  CHECK_EQ(dshape[4], param.ic_bn)
-//    << "input channels block must == ic_bn";
-  CHECK_EQ(param.channels % param.oc_bn, 0U)
-    << "output channels must divide oc_bn";
-
-  if (param.use_bias) {
-    NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape,
-                            Conv2DNCHWcParam::kBias, TShape({param.channels/param.oc_bn, param.oc_bn}));
-  }
-  // dilation
-  dim_t dilated_ksize_y = 1 + (param.kernel_size[0] - 1) * param.dilation[0];
-  dim_t dilated_ksize_x = 1 + (param.kernel_size[1] - 1) * param.dilation[1];
-  // oshape = [n, C, h, w, c]
-  TShape oshape({dshape[0], param.channels/param.oc_bn, 0, 0, param.oc_bn});
-  if (dshape[2] != 0) {
-    oshape[2] = (dshape[2] + param.padding[0] * 2 - dilated_ksize_y) / param.strides[0] + 1;
-  }
-  if (dshape[3] != 0) {
-    oshape[3] = (dshape[3] + param.padding[1] * 2 - dilated_ksize_x) / param.strides[1] + 1;
-  }
-  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
-  // Perform incomplete shape inference. Fill in the missing values in data shape.
-  // 1) We can always fill in the batch_size.
-  // 2) We can back-calculate the input height/width if the corresponding stride is 1.
-  dshape[0] = oshape[0];
-  if (oshape[2] && param.strides[0] == 1) {
-    dshape[2] = oshape[2] + dilated_ksize_y - 1 - 2 * param.padding[0];
-  }
-  if (oshape[3] && param.strides[1] == 1) {
-    dshape[3] = oshape[3] + dilated_ksize_x - 1 - 2 * param.padding[1];
-  }
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DNCHWcParam::kData, dshape);
-  // Check whether the kernel sizes are valid
-  if (dshape[2] != 0) {
-    CHECK_LE(dilated_ksize_y, dshape[2] + 2 * param.padding[0])
-      << "kernel size exceed input";
-  }
-  if (dshape[3] != 0) {
-    CHECK_LE(dilated_ksize_x, dshape[3] + 2 * param.padding[1])
-      << "kernel size exceed input";
-  }
-  return true;
-}
-
 NNVM_REGISTER_OP(conv2d_nChwc)
 .describe(R"code(2D convolution layer (e.g. spatial convolution over images).
 )code" NNVM_ADD_FILELINE)
 .add_argument("data", "5D Tensor", "Packed input data.")
 .add_argument("weight", "6D Tensor", "Packed weight matrix.")
 .add_argument("bias", "1D Tensor", "Bias parameter.")
-.add_arguments(Conv2DNCHWcParam::__FIELDS__())
-.set_attr_parser(ParamParser<Conv2DNCHWcParam>)
-.set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Conv2DNCHWcParam>)
-.set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DNCHWcParam>)
-.set_attr<FInferShape>("FInferShape", Conv2DNoPackInferShape)
+.add_arguments(Conv2DParam::__FIELDS__())
+.set_attr_parser(ParamParser<Conv2DParam>)
+.set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Conv2DParam>)
+.set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DParam>)
+.set_attr<FInferShape>("FInferShape", Conv2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>(
-"FInferLayout", [](const NodeAttrs& attrs,
-                   std::vector<Layout> *ilayouts,
-                   const std::vector<Layout> *last_ilayouts,
-                   std::vector<Layout> *olayouts) {
-  const Conv2DNCHWcParam& param = nnvm::get<Conv2DNCHWcParam>(attrs.parsed);
-  Layout in_layout("NCHW" + std::to_string(param.ic_bn) + "c");
-  Layout out_layout("NCHW" + std::to_string(param.oc_bn) + "c");
-  if (param.use_bias) {
-    CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
-  } else {
-    CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
-  }
-  // TODO: decide arg layout. now we assume arg layout has been correctly converted.
-  ilayouts->at(0) = std::move(in_layout);
-
-  CHECK_EQ(olayouts->size(), 1U);
-  olayouts->at(0) = std::move(out_layout);
-
-  return true;
-})
+.set_attr<FInferLayout>("FInferLayout", Conv2DInferLayout)
 .set_num_outputs(1)
-.set_num_inputs(UseBiasNumInputs<Conv2DNCHWcParam>)
+.set_num_inputs(UseBiasNumInputs<Conv2DParam>)
 .set_support_level(2);
 
 

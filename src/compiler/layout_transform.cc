@@ -116,6 +116,8 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
       const Layout& produce = produce_ilayouts[i];
       const Layout& request = request_ilayouts[i];
       if (produce != request && produce.IsDefined()) {
+        LOG(INFO) << "Insert layout transformer for " << i << "-th input of "
+                  << inode.source->op()->name << ". From " << produce << " to " << request;
         nnvm::NodePtr tnode = CreateLayoutTransformNode(produce, request);
         tnode->attrs.name = idx[e.node_id].source->attrs.name + "_" + request.name();
         tnode->inputs.emplace_back(new_node->inputs[i]);
@@ -123,6 +125,9 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
         new_node->inputs[i] = tnode_output;
         // layout produced by LayoutTransformNode
         new_layouts[tnode.get()] = {request};
+      } else if (!produce.IsDefined()) {
+        // do reverse infer
+        new_layouts[in.get()][e.index] = request;
       }
     }
     mirror_vec[nid] = new_node;

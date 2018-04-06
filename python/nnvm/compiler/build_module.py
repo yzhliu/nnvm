@@ -245,6 +245,9 @@ def build(graph, target=None, shape=None, dtype="float32",
     if layout:
         graph = graph_attr.set_layout_inputs(graph, layout)
         graph = graph.apply("LayoutTransform")
+        index = graph.index
+        layouts = graph.json_attr("layout")
+        layout = {x : layouts[index.entry_id(x)] for x in index.input_names}
 
     # Initial pass do shape type inference
     ishape, _ = graph_util.infer_shape(graph, **shape)

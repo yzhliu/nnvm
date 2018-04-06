@@ -70,27 +70,22 @@ Graph PrePack(const Graph& src) {
   std::unordered_map<const Node*, std::vector<Layout> > new_layouts;
 
   auto transform = [&](uint32_t nid, const NodePtr& n, std::vector<NodeEntry>* ret) {
-    if (src.HasAttr("layout")) {
-      // save the original layouts for further transform.
-      const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
-      if (new_layouts.count(n.get())) {
-        auto iter = new_layouts.find(n.get());
-        for (uint32_t i = 0; i < n->num_outputs(); ++i) {
-          const auto &layout = layouts[idx_graph.entry_id(nid, i)];
-          iter->second.at(i) = layout;
-        }
-      } else {
-        std::vector<Layout> output_layout;
-        for (uint32_t i = 0; i < n->num_outputs(); ++i) {
-          const auto &layout = layouts[idx_graph.entry_id(nid, i)];
-          output_layout.emplace_back(layout);
-        }
-        new_layouts[n.get()] = output_layout;
-      }
-    }
-
     nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
-    if (fn_prepack == nullptr) return false;
+    if (fn_prepack == nullptr) {
+      if (src.HasAttr("layout")) {
+        // save the original layouts for layout transform later.
+        const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
+        if (!new_layouts.count(n.get())) {
+          std::vector<Layout> output_layout;
+          for (uint32_t i = 0; i < n->num_outputs(); ++i) {
+            const auto &layout = layouts[idx_graph.entry_id(nid, i)];
+            output_layout.emplace_back(layout);
+          }
+          new_layouts[n.get()] = output_layout;
+        }
+      }
+      return false;
+    }
 
     // construct parameters for registered function
     std::vector<const Symbol*> op_inputs;
