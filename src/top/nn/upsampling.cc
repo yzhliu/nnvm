@@ -38,8 +38,8 @@ inline bool UpsamplingLayout(const NodeAttrs& attrs,
   CHECK_EQ(in_layouts->size(), 1U);
   CHECK_EQ(out_layouts->size(), 1U);
   // only support NCHW for now.
-  in_layouts->at(0).parse("NCHW");
-  out_layouts->at(0).parse("NCHW");
+  in_layouts->at(0) = "NCHW";
+  out_layouts->at(0) = "NCHW";
   return true;
 }
 

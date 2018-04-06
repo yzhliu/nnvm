@@ -253,7 +253,7 @@ FoldScaleKind Conv2DScaleAxisBackward(
   using top::Conv2DParam;
   const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
   // only optimize for nchw for now
-  if (param.layout == top::kNCHW) {
+  if (param.layout == "NCHW") {
     in_axis->emplace_back(1, 0);
     if (param.use_bias) {
       in_axis->emplace_back(2, 0);

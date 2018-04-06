@@ -41,34 +41,32 @@ inline std::vector<std::string> UseBiasListInputNames(const NodeAttrs& attrs) {
  * \param dst_layout target layout
  * \return shape in target layout
  */
-inline TShape ConvertLayout(TShape src, int src_layout, int dst_layout) {
+inline TShape ConvertLayout(TShape src, const Layout& src_layout, const Layout& dst_layout) {
   if (src_layout == dst_layout) return src;
-  else if (src_layout == kUndef) {
-    LOG(FATAL) << "cannot convert undefined layout to " << LayoutFlagStr(dst_layout);
-  } else if (dst_layout == kUndef) {
-    LOG(FATAL) << "cannot convert " << LayoutFlagStr(src_layout) << " to undefined layout";
+  else if (!src_layout.IsDefined()) {
+    LOG(FATAL) << "cannot convert undefined layout to " << dst_layout;
+  } else if (!dst_layout.IsDefined()) {
+    LOG(FATAL) << "cannot convert " << src_layout << " to undefined layout";
   }
 
-  Layout slayout(LayoutFlagStr(src_layout));
-  Layout dlayout(LayoutFlagStr(dst_layout));
+  CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from "
+                                            << src_layout << " to " << dst_layout;
 
-  CHECK(slayout.Convertible(dlayout)) << "cannot convert from " << slayout
-                                      << " to " << dlayout;
-
-  TShape dst(dlayout.ndim());
-  for (size_t i = 0; i < slayout.ndim(); ++i) {
-    Layout::LayoutAxis src_axis = slayout[i];
+  TShape dst(dst_layout.ndim());
+  for (size_t i = 0; i < src_layout.ndim(); ++i) {
+    Layout::LayoutAxis src_axis = src_layout[i];
     if (Layout::IsMajorAxis(src_axis)) {
-      int dst_major_pos = dlayout.PosMajor(src_axis);
-      int dst_minor_pos = dlayout.PosMinor(src_axis);
-      int src_minor_pos = slayout.PosMinor(src_axis);
-      uint32_t src_factor = slayout.FactorSize(src_axis);
-      uint32_t dst_factor = dlayout.FactorSize(src_axis);
+      int dst_major_pos = dst_layout.PosMajor(src_axis);
+      int dst_minor_pos = dst_layout.PosMinor(src_axis);
+      int src_minor_pos = src_layout.PosMinor(src_axis);
+      int src_factor = src_layout.FactorSize(src_axis);
+      int dst_factor = dst_layout.FactorSize(src_axis);
 
       uint32_t src_axis_size = src[i];
       if (src_minor_pos >= 0) {
+        if (src_factor == -1) src_factor = src[src_minor_pos];
         CHECK_EQ(src_factor, src[src_minor_pos]) << "src shape " << src
-                                                 << " does not agree with layout " << slayout;
+                                                 << " does not agree with layout " << src_layout;
         src_axis_size *= src_factor;
       }
 

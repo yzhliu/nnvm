@@ -157,9 +157,9 @@ NNVM_REGISTER_OP(_contrib_conv2d_nchw_kernel_packed)
         const std::vector<Layout> *last_ilayouts,
         std::vector<Layout> *olayouts) {
 // TODO: decide arg layout. now we assume arg layout has been correctly converted.
-ilayouts->at(0).parse("NCHW");
+ilayouts->at(0) = "NCHW";
 CHECK_EQ(olayouts->size(), 1U);
-olayouts->at(0).parse("NCHW");
+olayouts->at(0) = "NCHW";
 return true;
 })
 .set_num_outputs(1)

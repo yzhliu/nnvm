@@ -516,7 +516,9 @@ inline bool LayoutTransformInferShape(const NodeAttrs& attrs,
   const TShape &dshape = (*in_attrs)[0];
   if (dshape.ndim() == 0) return false;
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_attrs, 0,
-                           ConvertLayout(dshape, param.src_layout, param.dst_layout));
+                           ConvertLayout(dshape,
+                                         Layout(param.src_layout),
+                                         Layout(param.dst_layout)));
   return true;
 }
 
@@ -542,8 +544,8 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
     const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);
-    ilayouts->at(0) = LayoutFlagStr(param.src_layout);
-    olayouts->at(0) = LayoutFlagStr(param.dst_layout);
+    ilayouts->at(0) = param.src_layout;
+    olayouts->at(0) = param.dst_layout;
     return true;
 })
 .set_attr<FTVMCompute>(
@@ -552,18 +554,18 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
                   const Array<Tensor>& outputs) {
   const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
 
-  if (param.src_layout == param.dst_layout) return Array<Tensor>{ inputs[0] };
-  else if (param.src_layout == kUndef || param.dst_layout == kUndef) {
+  Layout src_layout(param.src_layout);
+  Layout dst_layout(param.dst_layout);
+
+  if (src_layout == dst_layout) return Array<Tensor>{ inputs[0] };
+  else if (!src_layout.IsDefined() || !dst_layout.IsDefined()) {
     LOG(FATAL) << "cannot convert from/to undefined layout";
   }
 
-  Layout src_layout(LayoutFlagStr(param.src_layout));
-  Layout dst_layout(LayoutFlagStr(param.dst_layout));
-
   CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
                                               << " to " << param.dst_layout;
-  CHECK(src_layout.IsAxisFactorComplete()) << "Src layout incomplete " << param.src_layout;
-  CHECK(dst_layout.IsAxisFactorComplete()) << "Dst layout incomplete " << param.dst_layout;
+  CHECK(src_layout.IsAxisFactorComplete()) << "Src layout " << param.src_layout << " incomplete.";
+  CHECK(dst_layout.IsAxisFactorComplete()) << "Dst layout " << param.dst_layout << " incomplete.";
 
   return Array<Tensor> {
     topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
@@ -577,12 +579,12 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
         Expr src_index(dst_indices[dst_major_pos]);
         if (dst_minor_pos >= 0) {
           CHECK(dst_factor > 0);
-          src_index = src_index * Expr(dst_factor) + dst_indices[dst_minor_pos];
+          src_index = src_index * dst_factor + dst_indices[dst_minor_pos];
         }
         if (Layout::IsMajorAxis(src_axis) && src_factor > 0) {
-          src_index = src_index / Expr(src_factor);
+          src_index = src_index / src_factor;
         } else if (Layout::IsMinorAxis(src_axis) && src_factor > 0) {
-          src_index = src_index % Expr(src_factor);
+          src_index = src_index % src_factor;
         }
         dst_to_src_indices.push_back(src_index);
       }

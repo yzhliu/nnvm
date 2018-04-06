@@ -31,7 +31,10 @@ DMLC_REGISTER_PARAMETER(Conv2DParam);
 inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape>* in_shape,
                              std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
+  const Layout layout(param.layout);
+
   if (param.use_bias) {
     CHECK_EQ(in_shape->size(), 3U) << "Input:[data, weight, bias]";
   } else {
@@ -41,7 +44,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
 
   TShape dshape = in_shape->at(0);
   if (dshape.ndim() == 0) return false;
-  dshape = ConvertLayout(dshape, param.layout, kNCHW);
+  dshape = ConvertLayout(dshape, layout, kNCHW);
 
   CHECK_EQ(dshape.ndim(), 4U) << "Input data should be 4D";
   CHECK_EQ(param.kernel_size.ndim(), 2U);
@@ -59,7 +62,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
                  param.kernel_size[0],
                  param.kernel_size[1]});
 
-  wshape = ConvertLayout(wshape, kNCHW, param.layout);
+  wshape = ConvertLayout(wshape, kNCHW, layout);
   wshape[0] *= param.groups;
 
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DParam::kWeight, wshape);
@@ -77,12 +80,11 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
   if (dshape[3] != 0) {
     oshape[3] = (dshape[3] + param.padding[1] * 2 - dilated_ksize_x) / param.strides[1] + 1;
   }
-  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0,
-                           ConvertLayout(oshape, kNCHW, param.layout));
+  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, ConvertLayout(oshape, kNCHW, layout));
   // Perform incomplete shape inference. Fill in the missing values in data shape.
   // 1) We can always fill in the batch_size.
   // 2) We can back-calculate the input height/width if the corresponding stride is 1.
-  oshape = ConvertLayout((*out_shape)[0], param.layout, kNCHW);
+  oshape = ConvertLayout((*out_shape)[0], layout, kNCHW);
   dshape[0] = oshape[0];
   if (oshape[2] && param.strides[0] == 1) {
     dshape[2] = oshape[2] + dilated_ksize_y - 1 - 2 * param.padding[0];
@@ -135,7 +137,7 @@ a bias vector is created and added to the outputs.
                        const std::vector<Layout> *last_ilayouts,
                        std::vector<Layout> *olayouts) {
   const Conv2DParam& param = nnvm::get<Conv2DParam>(attrs.parsed);
-  const Layout out_layout(LayoutFlagStr(param.layout));
+  const Layout out_layout(param.layout);
   if (param.use_bias) {
     CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
   } else {
@@ -348,16 +350,19 @@ DMLC_REGISTER_PARAMETER(Conv2DTransposeParam);
 inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
                                       std::vector<TShape>* in_shape,
                                       std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const Conv2DTransposeParam& param = nnvm::get<Conv2DTransposeParam>(attrs.parsed);
+  const Layout layout(param.layout);
   if (param.use_bias) {
     CHECK_EQ(in_shape->size(), 3U) << "Input:[data, weight, bias]";
   } else {
     CHECK_EQ(in_shape->size(), 2U) << "Input:[data, weight]";
   }
   CHECK_EQ(out_shape->size(), 1U);
+
   const TShape& dshape = (*in_shape)[Conv2DTransposeParam::kData];
   if (dshape.ndim() ==  0) return false;
-  TShape dshape_nchw = ConvertLayout(dshape, param.layout, kNCHW);
+  TShape dshape_nchw = ConvertLayout(dshape, layout, kNCHW);
 
   CHECK_EQ(dshape_nchw[1] % param.groups, 0U)
       << "input num_filter must divide group size";
@@ -374,7 +379,7 @@ inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
                  param.channels / param.groups,
                  param.kernel_size[0],
                  param.kernel_size[1]});
-  wshape = ConvertLayout(wshape, kNCHW, param.layout);
+  wshape = ConvertLayout(wshape, kNCHW, layout);
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DTransposeParam::kWeight, wshape);
 
   if (param.use_bias) {
@@ -393,7 +398,7 @@ inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
   oshape[3] = (param.strides[1] * (dshape_nchw[3] - 1) + dilated_ksize_x -
                2 * param.padding[1] + param.output_padding[1]);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0,
-                           ConvertLayout(oshape, kNCHW, param.layout));
+                           ConvertLayout(oshape, kNCHW, layout));
   return true;
 }
 

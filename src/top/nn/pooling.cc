@@ -24,17 +24,29 @@ DMLC_REGISTER_PARAMETER(Pool2DParam);
 inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape>* in_shape,
                              std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
 
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
-//  dshape = ConvertLayout(dshape, param.layout, kNCHW);
+
+  Layout layout(param.layout);
+  CHECK_EQ(dshape.ndim(), layout.ndim()) << "Input shape ndim " << dshape.ndim()
+                                         << " does not match layout " << layout;
+
+  if (!layout.IsAxisFactorComplete()) {
+    for (size_t i = 0; i < layout.ndim(); ++i) {
+      if (Layout::IsMinorAxis(layout[i])) {
+        layout.SetAxisFactor(layout[i], dshape[i]);
+      }
+    }
+  }
+
+  dshape = ConvertLayout(dshape, layout, kNCHW);
 
   TShape oshape = dshape;
-//  CHECK_EQ(dshape.ndim(), 4U)
-//      << "Pooling: Input data should be 4D";
   CHECK(param.pool_size[0] <= dshape[2] + 2 * param.padding[0])
       << "pool size (" << param.pool_size[0] << ") exceeds input (" << dshape[2]
       << " padded to " << (dshape[2] + 2*param.padding[0]) << ")";
@@ -53,7 +65,7 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
     oshape[3] = ((dshape[3] + 2 * param.padding[1] - param.pool_size[1] +
                   param.strides[1] - 1) / param.strides[1]) + 1;
   }
-//  oshape = ConvertLayout(oshape, kNCHW, param.layout);
+  oshape = ConvertLayout(oshape, kNCHW, layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
   return true;
 }
@@ -204,15 +216,17 @@ DMLC_REGISTER_PARAMETER(GlobalPool2DParam);
 inline bool GlobalPool2DInferShape(const nnvm::NodeAttrs& attrs,
                                    std::vector<TShape>* in_shape,
                                    std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
+  const Layout layout(param.layout);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
-  dshape = ConvertLayout(dshape, param.layout, kNCHW);
+  dshape = ConvertLayout(dshape, layout, kNCHW);
   TShape oshape = dshape;
   oshape[2] = oshape[3] = 1;
-  oshape = ConvertLayout(oshape, kNCHW, param.layout);
+  oshape = ConvertLayout(oshape, kNCHW, layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
   return true;
 }
@@ -240,8 +254,8 @@ NNVM_REGISTER_OP(global_max_pool2d)
     const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);
-    ilayouts->at(0) = LayoutFlagStr(param.layout);
-    olayouts->at(0) = LayoutFlagStr(param.layout);
+    ilayouts->at(0) = param.layout;
+    olayouts->at(0) = param.layout;
     return true;
 })
 .set_attr<FTVMCompute>(
@@ -249,7 +263,7 @@ NNVM_REGISTER_OP(global_max_pool2d)
                     const Array<Tensor>& inputs,
                     const Array<Tensor>& out_info) {
     const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
-    CHECK_EQ(param.layout, kNCHW)
+    CHECK_EQ(param.layout, "NCHW")
       << "global_max_pool2d currently only supports NCHW layout";
     return Array<Tensor>{
       topi::nn::global_pool(inputs[0], topi::nn::kMaxPool) };
@@ -282,8 +296,8 @@ NNVM_REGISTER_OP(global_avg_pool2d)
     const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);
-    ilayouts->at(0) = LayoutFlagStr(param.layout);
-    olayouts->at(0) = LayoutFlagStr(param.layout);
+    ilayouts->at(0) = param.layout;
+    olayouts->at(0) = param.layout;
     return true;
 })
 .set_attr<FTVMCompute>(
@@ -291,7 +305,7 @@ NNVM_REGISTER_OP(global_avg_pool2d)
                     const Array<Tensor>& inputs,
                     const Array<Tensor>& out_info) {
     const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
-    CHECK_EQ(param.layout, kNCHW)
+    CHECK_EQ(param.layout, "NCHW")
       << "global_avg_pool2d currently only supports NCHW layout";
     return Array<Tensor>{
       topi::nn::global_pool(inputs[0], topi::nn::kAvgPool) };

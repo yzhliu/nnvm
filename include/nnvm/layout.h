@@ -92,6 +92,161 @@ class Layout {
     return undef;
   }
 
+  /*!
+   * \brief Swap current object with other
+   * \param other another object to be swapped.
+   */
+  inline void swap(Layout& other) {  // NOLINT(*)
+    std::swap(name_, other.name_);
+    std::swap(major_position_, other.major_position_);
+    std::swap(minor_position_, other.minor_position_);
+    std::swap(minor_factor_, other.minor_factor_);
+  }
+
+  inline bool Convertible(const Layout &dst) const {
+    if (!this->IsDefined() || !dst.IsDefined()) return false;
+    for (size_t i = 0; i < kUniqueAxis; ++i) {
+      if ((major_position_[i] >= 0 && dst.major_position_[i] < 0) ||
+          (major_position_[i] < 0 && dst.major_position_[i] >= 0)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  inline bool Compatible(const Layout &other) const {
+    return layout_simplified_ == other.layout_simplified_;
+  }
+
+  inline bool IsAxisFactorComplete() const {
+    if (!IsDefined()) return false;
+    for (size_t i = 0; i < kUniqueAxis; ++i) {
+      if (minor_factor_[i] == -1) return false;
+    }
+    return true;
+  }
+
+  inline void CompleteAxisFactor(int64_t factor) {
+    if (factor <= 0 || IsAxisFactorComplete()) return;
+    for (size_t i = 0;i < kUniqueAxis; ++i) {
+      if (minor_factor_[i] == -1) minor_factor_[i] = factor;
+    }
+    ReGenerateName();
+  }
+
+  inline void SetAxisFactor(LayoutAxis axis, int64_t factor) {
+    CHECK_GT(factor, 0);
+    CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
+    int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
+    CHECK(minor_position_[idx] >= 0) << "Missing axis " << static_cast<char>(idx + 'a')
+                                     << " in layout " << name_;
+    minor_factor_[idx] = factor;
+    ReGenerateName();
+  }
+
+  using iterator = std::vector<LayoutAxis>::const_iterator;
+  using reverse_iterator = std::vector<LayoutAxis>::const_reverse_iterator;
+
+  /*! \return begin iterator */
+  inline iterator begin() const {
+    return layout_simplified_.begin();
+  }
+  /*! \return end iterator */
+  inline iterator end() const {
+    return layout_simplified_.end();
+  }
+  /*! \return rbegin iterator */
+  inline reverse_iterator rbegin() const {
+    return layout_simplified_.rbegin();
+  }
+  /*! \return rend iterator */
+  inline reverse_iterator rend() const {
+    return layout_simplified_.rend();
+  }
+
+  inline size_t ndim() const {
+    return layout_simplified_.size();
+  }
+
+  inline int32_t PosMajor(LayoutAxis c) const {
+    if (!this->IsDefined()) return -1;
+    CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
+    int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
+    return major_position_[idx];
+  }
+
+  inline int32_t PosMinor(LayoutAxis c) const {
+    if (!this->IsDefined()) return -1;
+    CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
+    int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
+    return minor_position_[idx];
+  }
+
+  inline int64_t FactorSize(LayoutAxis axis) const {
+    if (!this->IsDefined()) return -1;
+    CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
+    int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
+    return minor_factor_[idx];
+  }
+
+  inline const LayoutAxis operator[](size_t i) const {
+    return layout_simplified_[i];
+  }
+
+  inline bool IsDefined() const {
+    return name_ != "__undef__";
+  }
+
+  inline const std::string& name() const {
+    return name_;
+  }
+
+  inline void Save(dmlc::JSONWriter* writer) const {
+    writer->Write(name_);
+  }
+
+  /*!
+   * \brief Load layout from JSON.
+   * \param reader JSONReader
+   */
+  inline void Load(dmlc::JSONReader* reader) {
+    std::string tmp;
+    reader->Read(&tmp);
+    this->parse(tmp);
+  }
+
+  /*!
+   * \brief allow output string of layout to ostream
+   * \param os the output stream
+   * \param l the layout
+   * \return the ostream
+   */
+  friend std::ostream& operator<<(std::ostream& os, const Layout& l) {
+    os << l.name_;
+    return os;
+  }
+
+ private:
+  static const uint32_t kUniqueAxis = 26;
+
+  std::string name_;
+  int32_t major_position_[kUniqueAxis];
+  int32_t minor_position_[kUniqueAxis];
+  int64_t minor_factor_[kUniqueAxis];
+  std::vector<LayoutAxis> layout_simplified_;
+
+  inline void ReGenerateName() {
+    std::ostringstream new_name;
+    for (LayoutAxis c : layout_simplified_) {
+      if (IsMinorAxis(c)) {
+        if (minor_factor_[c-'a'] != -1) new_name << minor_factor_[c-'a'];
+        else new_name << '_';
+      }
+      new_name << c;
+    }
+    name_ = new_name.str();
+  }
+
   void parse(const std::string& layout) {
     name_ = layout;
     if (layout == "__undef__") return;
@@ -142,144 +297,6 @@ class Layout {
         << static_cast<char>(axis - 'a' + 'A');
     }
   }
-
-  /*!
-   * \brief Swap current object with other
-   * \param other another object to be swapped.
-   */
-  inline void swap(Layout& other) {  // NOLINT(*)
-    std::swap(name_, other.name_);
-    std::swap(major_position_, other.major_position_);
-    std::swap(minor_position_, other.minor_position_);
-    std::swap(minor_factor_, other.minor_factor_);
-  }
-
-  inline bool Convertible(const Layout &dst) const {
-    if (!this->IsDefined() || !dst.IsDefined()) return false;
-    for (size_t i = 0; i < kUniqueAxis; ++i) {
-      if ((major_position_[i] >= 0 && dst.major_position_[i] < 0) ||
-          (major_position_[i] < 0 && dst.major_position_[i] >= 0)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  inline bool Compatible(const Layout &other) const {
-    return layout_simplified_ == other.layout_simplified_;
-  }
-
-  inline bool IsAxisFactorComplete() const {
-    if (!IsDefined()) return false;
-    for (size_t i = 0; i < kUniqueAxis; ++i) {
-      if (minor_factor_[i] == -1) return false;
-    }
-    return true;
-  }
-
-  inline void CompleteAxisFactor(uint32_t factor) {
-    if (factor <= 0 || IsAxisFactorComplete()) return;
-    for (size_t i = 0;i < kUniqueAxis; ++i) {
-      if (minor_factor_[i] == -1) minor_factor_[i] = factor;
-    }
-    std::ostringstream new_name;
-    for (LayoutAxis c : layout_simplified_) {
-      if (IsMinorAxis(c)) new_name << minor_factor_[c-'a'];
-      new_name << c;
-    }
-    name_ = new_name.str();
-  }
-
-  using iterator = std::vector<LayoutAxis>::const_iterator;
-  using reverse_iterator = std::vector<LayoutAxis>::const_reverse_iterator;
-
-  /*! \return begin iterator */
-  inline iterator begin() const {
-    return layout_simplified_.begin();
-  }
-  /*! \return end iterator */
-  inline iterator end() const {
-    return layout_simplified_.end();
-  }
-  /*! \return rbegin iterator */
-  inline reverse_iterator rbegin() const {
-    return layout_simplified_.rbegin();
-  }
-  /*! \return rend iterator */
-  inline reverse_iterator rend() const {
-    return layout_simplified_.rend();
-  }
-
-  inline size_t ndim() const {
-    return layout_simplified_.size();
-  }
-
-  inline int32_t PosMajor(LayoutAxis c) const {
-    if (!this->IsDefined()) return -1;
-    CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
-    int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
-    return major_position_[idx];
-  }
-
-  inline int32_t PosMinor(LayoutAxis c) const {
-    if (!this->IsDefined()) return -1;
-    CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
-    int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
-    return minor_position_[idx];
-  }
-
-  inline int32_t FactorSize(LayoutAxis axis) const {
-    if (!this->IsDefined()) return -1;
-    CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
-    int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
-    return minor_factor_[idx];
-  }
-
-  inline const LayoutAxis operator[](size_t i) const {
-    return layout_simplified_[i];
-  }
-
-  inline bool IsDefined() const {
-    return name_ != "__undef__";
-  }
-
-  inline const std::string& name() const {
-    return name_;
-  }
-
-  inline void Save(dmlc::JSONWriter* writer) const {
-    writer->Write(name_);
-  }
-
-  /*!
-   * \brief Load layout from JSON.
-   * \param reader JSONReader
-   */
-  inline void Load(dmlc::JSONReader* reader) {
-    std::string tmp;
-    reader->Read(&tmp);
-    this->parse(tmp);
-  }
-
-  /*!
-   * \brief allow output string of layout to ostream
-   * \param os the output stream
-   * \param l the layout
-   * \return the ostream
-   */
-  friend std::ostream& operator<<(std::ostream& os, const Layout& l) {
-    os << l.name_;
-    return os;
-  }
-
- private:
-  static const uint32_t kUniqueAxis = 26;
-
-  std::string name_;
-  int32_t major_position_[kUniqueAxis];
-  int32_t minor_position_[kUniqueAxis];
-  int32_t minor_factor_[kUniqueAxis];
-  std::vector<LayoutAxis> layout_simplified_;
 };
 
 }  // namespace nnvm
