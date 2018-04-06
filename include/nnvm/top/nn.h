@@ -267,7 +267,7 @@ struct Pool2DParam : public dmlc::Parameter<Pool2DParam> {
   TShape pool_size;
   TShape strides;
   TShape padding;
-  int layout;
+  std::string layout;
   bool ceil_mode;
 
   DMLC_DECLARE_PARAMETER(Pool2DParam) {
@@ -278,12 +278,7 @@ struct Pool2DParam : public dmlc::Parameter<Pool2DParam> {
     DMLC_DECLARE_FIELD(padding).set_default(TShape({0, 0}))
       .describe("If padding is non-zero, then the input is implicitly zero-padded"
                 "on both sides for padding number of points");
-    DMLC_DECLARE_FIELD(layout)
-      .add_enum("NCHW", kNCHW)
-      .add_enum("NHWC", kNHWC)
-      .add_enum("NCHW8c", kNCHW8c)
-      .add_enum("NCHW16c", kNCHW16c)
-      .set_default(kNCHW)
+    DMLC_DECLARE_FIELD(layout).set_default("NCHW")
       .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
                 "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
                 "dimensions respectively. Convolution is applied on the 'H' and"

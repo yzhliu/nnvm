@@ -95,7 +95,14 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
         << "Layout infer fail";
     CHECK_EQ(request_ilayouts.size(), new_node->num_inputs());
     CHECK_EQ(produce_olayouts.size(), new_node->num_outputs());
-    // TODO: check layout factors are decided
+    for (const Layout& l : request_ilayouts) {
+      CHECK(!l.IsDefined() || l.IsAxisFactorComplete())
+        << inode.source->op()->name << " generates incomplete input layout " << l;
+    }
+    for (const Layout& l : produce_olayouts) {
+      CHECK(!l.IsDefined() || l.IsAxisFactorComplete())
+        << inode.source->op()->name << " generates incomplete output layout " << l;
+    }
 
     // update new layouts
     new_layouts[new_node.get()] = std::move(produce_olayouts);

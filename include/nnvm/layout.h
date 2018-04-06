@@ -8,6 +8,7 @@
 
 #include <dmlc/parameter.h>
 #include <string>
+#include <sstream>
 #include <vector>
 #include <algorithm>
 
@@ -55,6 +56,15 @@ class Layout {
     return *this;
   }
   /*!
+   * \brief assignment from string.
+   * \param src source layout
+   * \return reference of self
+   */
+  inline Layout& operator=(const std::string& src) {
+    this->parse(src);
+    return *this;
+  }
+  /*!
    * \return whether two layout equals
    * \param s the layout to compare against
    */
@@ -90,7 +100,7 @@ class Layout {
     std::fill_n(minor_position_, kUniqueAxis, -1);
     std::fill_n(minor_factor_, kUniqueAxis, 0);
 
-    uint32_t factor = 0;
+    int32_t factor = 0;
     uint32_t curr = 0;
     for (size_t i = 0; i < layout.size(); ++i) {
       const LayoutAxis c = layout.at(i);
@@ -104,8 +114,9 @@ class Layout {
         layout_simplified_.push_back(c);
       } else if (IsMinorAxis(c)) {
         int pos = c - 'a';
-        CHECK_GT(factor, 0) << "Invalid layout " << layout
-                            << ": invalid factor size " << factor << " for axis " << c;
+        CHECK(factor > 0 || factor == -1) << "Invalid layout " << layout
+                                          << ": invalid factor size " << factor
+                                          << " for axis " << c;
         CHECK_EQ(minor_position_[pos], -1) << "Invalid layout " << layout
                                            << ": duplicate axis " << c;
         CHECK_EQ(minor_factor_[pos], 0) << "Invalid layout " << layout
@@ -115,7 +126,11 @@ class Layout {
         layout_simplified_.push_back(c);
         factor = 0;
       } else if (c >= '0' && c <= '9') {
+        CHECK(factor >= 0) << "Invalid layout " << layout << ": _ is adjacent to a number.";
         factor = factor * 10 + c - '0';
+      } else if (c == '_') {
+        CHECK_EQ(factor, 0) << "Invalid layout " << layout << ": _ is adjacent to a number.";
+        factor = -1;
       } else {
         LOG(FATAL) << "Invalid layout " << layout;
       }
@@ -140,6 +155,7 @@ class Layout {
   }
 
   inline bool Convertible(const Layout &dst) const {
+    if (!this->IsDefined() || !dst.IsDefined()) return false;
     for (size_t i = 0; i < kUniqueAxis; ++i) {
       if ((major_position_[i] >= 0 && dst.major_position_[i] < 0) ||
           (major_position_[i] < 0 && dst.major_position_[i] >= 0)) {
@@ -147,6 +163,31 @@ class Layout {
       }
     }
     return true;
+  }
+
+  inline bool Compatible(const Layout &other) const {
+    return layout_simplified_ == other.layout_simplified_;
+  }
+
+  inline bool IsAxisFactorComplete() const {
+    if (!IsDefined()) return false;
+    for (size_t i = 0; i < kUniqueAxis; ++i) {
+      if (minor_factor_[i] == -1) return false;
+    }
+    return true;
+  }
+
+  inline void CompleteAxisFactor(uint32_t factor) {
+    if (factor <= 0 || IsAxisFactorComplete()) return;
+    for (size_t i = 0;i < kUniqueAxis; ++i) {
+      if (minor_factor_[i] == -1) minor_factor_[i] = factor;
+    }
+    std::ostringstream new_name;
+    for (LayoutAxis c : layout_simplified_) {
+      if (IsMinorAxis(c)) new_name << minor_factor_[c-'a'];
+      new_name << c;
+    }
+    name_ = new_name.str();
   }
 
   using iterator = std::vector<LayoutAxis>::const_iterator;
@@ -173,19 +214,22 @@ class Layout {
     return layout_simplified_.size();
   }
 
-  inline int PosMajor(LayoutAxis c) const {
+  inline int32_t PosMajor(LayoutAxis c) const {
+    if (!this->IsDefined()) return -1;
     CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
     int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
     return major_position_[idx];
   }
 
-  inline int PosMinor(LayoutAxis c) const {
+  inline int32_t PosMinor(LayoutAxis c) const {
+    if (!this->IsDefined()) return -1;
     CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
     int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
     return minor_position_[idx];
   }
 
-  inline uint32_t FactorSize(LayoutAxis axis) const {
+  inline int32_t FactorSize(LayoutAxis axis) const {
+    if (!this->IsDefined()) return -1;
     CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
     int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
     return minor_factor_[idx];
@@ -232,9 +276,9 @@ class Layout {
   static const uint32_t kUniqueAxis = 26;
 
   std::string name_;
-  int major_position_[kUniqueAxis];
-  int minor_position_[kUniqueAxis];
-  uint32_t minor_factor_[kUniqueAxis];
+  int32_t major_position_[kUniqueAxis];
+  int32_t minor_position_[kUniqueAxis];
+  int32_t minor_factor_[kUniqueAxis];
   std::vector<LayoutAxis> layout_simplified_;
 };
 

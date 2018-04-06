@@ -562,6 +562,8 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
 
   CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
                                               << " to " << param.dst_layout;
+  CHECK(src_layout.IsAxisFactorComplete()) << "Src layout incomplete " << param.src_layout;
+  CHECK(dst_layout.IsAxisFactorComplete()) << "Dst layout incomplete " << param.dst_layout;
 
   return Array<Tensor> {
     topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
@@ -569,8 +571,8 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
       for (Layout::LayoutAxis src_axis : src_layout) {
         int dst_major_pos = dst_layout.PosMajor(src_axis);
         int dst_minor_pos = dst_layout.PosMinor(src_axis);
-        uint32_t src_factor = src_layout.FactorSize(src_axis);
-        uint32_t dst_factor = dst_layout.FactorSize(src_axis);
+        int32_t src_factor = src_layout.FactorSize(src_axis);
+        int32_t dst_factor = dst_layout.FactorSize(src_axis);
 
         Expr src_index(dst_indices[dst_major_pos]);
         if (dst_minor_pos >= 0) {

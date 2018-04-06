@@ -58,6 +58,28 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+inline bool Pool2DInferLayout(const NodeAttrs& attrs,
+                              std::vector<Layout> *ilayouts,
+                              const std::vector<Layout> *last_ilayouts,
+                              std::vector<Layout> *olayouts) {
+  const Pool2DParam &param = nnvm::get<Pool2DParam>(attrs.parsed);
+  CHECK_EQ(ilayouts->size(), 1);
+  CHECK_EQ(last_ilayouts->size(), 1);
+  CHECK_EQ(olayouts->size(), 1);
+
+  const Layout &input = ilayouts->at(0);
+
+  Layout layout(param.layout);
+  if (layout.IsAxisFactorComplete() || !layout.Compatible(input)) {
+    layout.CompleteAxisFactor(1);
+    ilayouts->at(0) = layout;
+  }
+
+  olayouts->at(0) = ilayouts->at(0);
+
+  return true;
+}
+
 NNVM_REGISTER_OP(max_pool2d)
 .describe(R"code(Max pooling operation for one dimensional data.
 
@@ -82,32 +104,26 @@ NNVM_REGISTER_OP(max_pool2d)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", Pool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
-.set_attr<FTVMCompute>(
-  "FTVMCompute", [](const NodeAttrs& attrs,
-                    const Array<Tensor>& inputs,
-                    const Array<Tensor>& out_info) {
-    const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
-    auto pool_size = ShapeToArray(param.pool_size);
-    auto strides = ShapeToArray(param.strides);
-    auto padding = ShapeToArray(param.padding);
-    auto ceil_mode = param.ceil_mode;
-    CHECK(param.layout == kNCHW || param.layout == kNCHW8c || param.layout == kNCHW16c || param.layout == kNHWC)
-      << "max_pool2d currently only supports NCHW or NCHWc layout";
-    CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
-      << "max_pool2d currently only supports NCHW or NCHWc layout";
+.set_attr<FInferLayout>("FInferLayout", Pool2DInferLayout)
+.set_attr<FTVMCompute>("FTVMCompute", [](const NodeAttrs& attrs,
+                                         const Array<Tensor>& inputs,
+                                         const Array<Tensor>& out_info) {
+  const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
+  auto pool_size = ShapeToArray(param.pool_size);
+  auto strides = ShapeToArray(param.strides);
+  auto padding = ShapeToArray(param.padding);
+  auto ceil_mode = param.ceil_mode;
 
-    std::string layout = "NCHW";
-    if (param.layout == kNCHW8c) {
-      layout = "NCHW8c";
-    } else if (param.layout == kNCHW16c) {
-      layout = "NCHW16c";
-    } else if (param.layout == kNHWC) {
-      layout = "NHWC";
-    }
-    return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding,
-                     topi::nn::kMaxPool, ceil_mode, layout)};
+  Layout layout(param.layout);
+  CHECK(layout.Convertible(Layout("NCHW")))
+    << "max_pool2d currently only supports layouts that are convertible from NCHW";
+
+  CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
+    << "max_pool2d currently only supports NCHW or NCHWc layout";
+
+  return Array<Tensor>{
+    topi::nn::pool(inputs[0], pool_size, strides, padding,
+                   topi::nn::kMaxPool, ceil_mode, layout.name())};
 })
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
@@ -156,33 +172,26 @@ NNVM_REGISTER_OP(avg_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Pool2DParam>)
 .set_attr<FInferShape>("FInferShape", Pool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
-.set_attr<FTVMCompute>(
-  "FTVMCompute", [](const NodeAttrs& attrs,
-                    const Array<Tensor>& inputs,
-                    const Array<Tensor>& out_info) {
-    const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
-    auto pool_size = ShapeToArray(param.pool_size);
-    auto strides = ShapeToArray(param.strides);
-    auto padding = ShapeToArray(param.padding);
-    auto ceil_mode = param.ceil_mode;
+.set_attr<FInferLayout>("FInferLayout", Pool2DInferLayout)
+.set_attr<FTVMCompute>("FTVMCompute", [](const NodeAttrs& attrs,
+                                         const Array<Tensor>& inputs,
+                                         const Array<Tensor>& out_info) {
+  const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
+  auto pool_size = ShapeToArray(param.pool_size);
+  auto strides = ShapeToArray(param.strides);
+  auto padding = ShapeToArray(param.padding);
+  auto ceil_mode = param.ceil_mode;
 
-    CHECK(param.layout == kNCHW || param.layout == kNCHW8c || param.layout == kNCHW16c || param.layout == kNHWC)
-      << "max_pool2d currently only supports NCHW, NHWC or NCHWc layout";
-    CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
-      << "max_pool2d currently only supports NCHW, NHWC or NCHWc layout";
+  Layout layout(param.layout);
+  CHECK(layout.Convertible(Layout("NCHW")))
+    << "avg_pool2d currently only supports layouts that are convertible from NCHW";
 
-    std::string layout = "NCHW";
-    if (param.layout == kNCHW8c) {
-      layout = "NCHW8c";
-    } else if (param.layout == kNCHW16c) {
-      layout = "NCHW16c";
-    } else if (param.layout == kNHWC) {
-      layout = "NHWC";
-    }
-    return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding,
-                     topi::nn::kAvgPool, ceil_mode, layout)};
+  CHECK(inputs[0].ndim() == 4 || inputs[0].ndim() == 5)
+    << "avg_pool2d currently only supports layouts that are convertible from NCHW";
+
+  return Array<Tensor>{
+    topi::nn::pool(inputs[0], pool_size, strides, padding,
+                   topi::nn::kAvgPool, ceil_mode, layout.name())};
 
 })
 .set_num_outputs(1)
