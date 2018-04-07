@@ -67,23 +67,32 @@ Graph PrePack(const Graph& src) {
   const DTypeVector& dtype_vec = src.GetAttr<DTypeVector>("dtype");
   const IndexedGraph& idx_graph = src.indexed_graph();
 
-  std::unordered_map<const Node*, std::vector<Layout> > new_layouts;
+  std::vector<std::vector<Layout > > in_layouts_of_node(idx_graph.num_nodes());
+  std::unordered_map<const Node*, uint32_t> new_nodes;
+
+  if (src.HasAttr("layout")) {
+    // record layouts so that LayoutTransform pass can fix layouts correctly,
+    // e.g., conv2d can be replaced by some contrib implement
+    // whose layout is different from the original one (which was imported from a model file).
+    const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
+    for (uint32_t nid = 0; nid < idx_graph.num_nodes(); ++nid) {
+      const auto &inode = idx_graph[nid];
+      if (inode.source->is_variable() || fweight_prepack.count(inode.source->op())) {
+        // do not record input layouts of nodes that will be replaced.
+        continue;
+      }
+      std::vector<Layout> in_layout;
+      for (const auto& e : inode.inputs) {
+        in_layout.emplace_back(layouts[idx_graph.entry_id(e)]);
+      }
+      in_layouts_of_node[nid] = in_layout;
+    }
+  }
 
   auto transform = [&](uint32_t nid, const NodePtr& n, std::vector<NodeEntry>* ret) {
     nnvm::compiler::FTVMWeightPrepack fn_prepack = fweight_prepack.get(n->op(), nullptr);
     if (fn_prepack == nullptr) {
-      if (src.HasAttr("layout")) {
-        // save the original layouts for layout transform later.
-        const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
-        if (!new_layouts.count(n.get())) {
-          std::vector<Layout> output_layout;
-          for (uint32_t i = 0; i < n->num_outputs(); ++i) {
-            const auto &layout = layouts[idx_graph.entry_id(nid, i)];
-            output_layout.emplace_back(layout);
-          }
-          new_layouts[n.get()] = output_layout;
-        }
-      }
+      new_nodes[n.get()] = nid;
       return false;
     }
 
@@ -119,10 +128,10 @@ Graph PrePack(const Graph& src) {
     std::vector<Layout> ret_layouts(ret_idx.num_node_entries(), Layout::Undef());
     for (uint32_t nid = 0; nid < ret_idx.num_nodes(); ++nid) {
       const auto& inode = ret_idx[nid];
-      const auto& layout_iter = new_layouts.find(inode.source);
-      if (layout_iter != new_layouts.end()) {
-        for (uint32_t i = 0; i < inode.source->num_outputs(); ++i) {
-          ret_layouts[ret_idx.entry_id(nid, i)] = layout_iter->second[i];
+      if (new_nodes.count(inode.source)) {
+        const std::vector<Layout>& in_layouts = in_layouts_of_node[new_nodes[inode.source]];
+        for (const auto& e : inode.inputs) {
+          ret_layouts[ret_idx.entry_id(e)] = in_layouts[e.index];
         }
       }
     }

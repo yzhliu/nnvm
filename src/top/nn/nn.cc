@@ -86,7 +86,7 @@ If ``use_bias`` is set to be false, then the ``bias`` term is ignored.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<DenseParam>)
 .set_attr<FInferShape>("FInferShape", DenseInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>) // fix input data layout
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -262,7 +262,7 @@ axis to be the last item in the input shape.
 .add_arguments(BatchNormParam::__FIELDS__())
 .set_attr_parser(ParamParser<BatchNormParam>)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<BatchNormParam>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)  // fix input data layout
 .set_num_inputs(5)
 .set_num_outputs(3)
 .set_attr<FInferShape>("FInferShape", BatchNormInferShape)

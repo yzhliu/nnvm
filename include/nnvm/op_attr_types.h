@@ -186,8 +186,7 @@ using FSetInputVarAttrOnCompose = std::function<void(
  *                 a __layout_transform__ operator will be inserted automatically.
  * \param last_ilayouts The input layouts requested by the node
  *                      at the last infer pass (if any).
- * \param olayouts Given the output layouts the node produced at the last infer pass (if any),
- *                 it should be filled by layouts that the node produces.
+ * \param olayouts Inferred output layouts.
  * \return whether all layouts are inferred.
  */
 using FInferLayout = std::function<bool(

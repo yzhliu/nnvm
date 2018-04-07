@@ -137,8 +137,7 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
   else in = last_in;
 
   if (!in.IsDefined()) in = out;
-  CHECK(!out.IsDefined() || out == in)
-    << "Input layout " << in << " does not match output layout " << out;
+  out = in;
 
   auto write = [](std::vector<Layout> *vec, Layout& value, size_t size) {
     for (size_t i = 0; i < size; ++i) {
@@ -146,7 +145,7 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
     }
   };
   write(in_layouts, in, in_size);
-  write(out_layouts, in, out_size);
+  write(out_layouts, out, out_size);
 
   return true;
 }
