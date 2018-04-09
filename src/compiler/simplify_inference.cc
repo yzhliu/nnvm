@@ -23,7 +23,8 @@ BatchNormToInferUnpack(const nnvm::NodeAttrs& attrs,
                        nnvm::NodeEntry beta,
                        nnvm::NodeEntry moving_mean,
                        nnvm::NodeEntry moving_var,
-                       TShape dshape) {
+                       TShape dshape,
+                       TShape bshape) {
   CHECK_NE(dshape.ndim(), 0);
   CHECK(attrs.op);
   static const  Op* bn_op = Op::Get("batch_norm");
@@ -61,15 +62,8 @@ BatchNormToInferUnpack(const nnvm::NodeAttrs& attrs,
         "elemwise_add", bn_name + "_add_beta", {shift, beta});
   }
   int axis = param.axis;
-  scale = ExpandBiasToMatchAxis(scale, dshape.ndim(), 1, axis);
-  shift = ExpandBiasToMatchAxis(shift, dshape.ndim(), 1, axis);
-
-  // expand the first axis as well.
-  // make it agree with the layout, which is required by layout transform.
-  scale = MakeNode("expand_dims", scale.node->attrs.name + "_expand_0axis",
-                   {scale}, {{"axis", "0"}, {"num_newaxis", std::to_string(axis)}});
-  shift = MakeNode("expand_dims", shift.node->attrs.name + "_expand_0axis",
-                   {shift}, {{"axis", "0"}, {"num_newaxis", std::to_string(axis)}});
+  scale = ExpandBiasToMatchAxis(scale, dshape.ndim()-bshape.ndim()+1, 1, axis);
+  shift = ExpandBiasToMatchAxis(shift, dshape.ndim()-bshape.ndim()+1, 1, axis);
 
   NodeEntry out = MakeNode("broadcast_mul", bn_name + "_a_mul_data",
                            {data, scale});
@@ -96,7 +90,8 @@ Graph SimplifyInference(nnvm::Graph src) {
           n->inputs[2],
           n->inputs[3],
           n->inputs[4],
-          shape_vec[idx.entry_id(nid, 0)]);
+          shape_vec[idx.entry_id(nid, 0)],
+          shape_vec[idx.entry_id(nid, 1)]);
       return true;
     } else if (n->op() == dropout_op) {
       NodeEntry undef = MakeNode("__undef__", "undef", {});

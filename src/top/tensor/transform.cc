@@ -63,7 +63,7 @@ Example::
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", FlattenInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .add_argument("data", "Tensor", "Input data.")
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
@@ -157,7 +157,7 @@ Example::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ConcatenateParam>)
 .set_attr<FInferShape>("FInferShape", ConcatenateInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<-1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -210,7 +210,7 @@ will return a new array with shape ``(2,1,1,1,1,1,3,4)``.
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ExpandDimsParam>)
 .set_attr<FInferShape>("FInferShape", ExpandDimsInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<FTVMCompute>(
@@ -259,7 +259,7 @@ Examples::
 .set_attr<nnvm::FInferShape>("FInferShape", AssignOutputAttr<TShape, 1, 0>)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)
 // never transform layout of the second input array.
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_num_inputs(2)
 .set_num_outputs(1)
 .set_attr<FGradient>(
@@ -356,7 +356,7 @@ along which to split the array.
 .set_attr_parser(SplitParamParser)
 .set_attr<FInferShape>("FInferShape", SplitInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, -1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, -1>)
 .set_num_inputs(1)
 .set_num_outputs(SplitNumOutputs)
 .set_attr<FTVMCompute>(
@@ -552,7 +552,7 @@ The significance of each is explained below:
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ReshapeParam>)
 .set_attr<FInferShape>("FInferShape", ReshapeInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<FTVMCompute>(
@@ -596,7 +596,7 @@ the input array into an output array with the same shape as the second input arr
 })
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
 // never transform layout of the second input array.
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
                   const std::vector<NodeEntry>& ograds) {
@@ -677,7 +677,7 @@ Examples::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<SqueezeParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", SqueezeShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<FTVMCompute>(
@@ -760,7 +760,7 @@ Examples::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<TransposeParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", TransposeShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_support_level(4)

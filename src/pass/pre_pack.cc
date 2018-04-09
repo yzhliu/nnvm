@@ -67,7 +67,8 @@ Graph PrePack(const Graph& src) {
   const DTypeVector& dtype_vec = src.GetAttr<DTypeVector>("dtype");
   const IndexedGraph& idx_graph = src.indexed_graph();
 
-  std::vector<std::vector<Layout > > in_layouts_of_node(idx_graph.num_nodes());
+  std::vector<std::vector<Layout> > in_layouts_of_node(idx_graph.num_nodes());
+  std::vector<std::vector<Layout> > out_layouts_of_node(idx_graph.num_nodes());
   std::unordered_map<const Node*, uint32_t> new_nodes;
 
   if (src.HasAttr("layout")) {
@@ -77,7 +78,7 @@ Graph PrePack(const Graph& src) {
     const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
     for (uint32_t nid = 0; nid < idx_graph.num_nodes(); ++nid) {
       const auto &inode = idx_graph[nid];
-      if (inode.source->is_variable() || fweight_prepack.count(inode.source->op())) {
+      if (fweight_prepack.count(inode.source->op())) {
         // do not record input layouts of nodes that will be replaced.
         continue;
       }
@@ -86,6 +87,12 @@ Graph PrePack(const Graph& src) {
         in_layout.emplace_back(layouts[idx_graph.entry_id(e)]);
       }
       in_layouts_of_node[nid] = in_layout;
+
+      std::vector<Layout> out_layout;
+      for (uint i = 0; i < inode.source->num_outputs(); ++i) {
+        out_layout.emplace_back(layouts[idx_graph.entry_id(nid, i)]);
+      }
+      out_layouts_of_node[nid] = out_layout;
     }
   }
 
@@ -132,6 +139,10 @@ Graph PrePack(const Graph& src) {
         const std::vector<Layout>& in_layouts = in_layouts_of_node[new_nodes[inode.source]];
         for (const auto& e : inode.inputs) {
           ret_layouts[ret_idx.entry_id(e)] = in_layouts[e.index];
+        }
+        const std::vector<Layout>& out_layouts = out_layouts_of_node[new_nodes[inode.source]];
+        for (uint32_t i = 0; i < inode.source->num_outputs(); ++i) {
+          ret_layouts[ret_idx.entry_id(nid, i)] = out_layouts[i];
         }
       }
     }

@@ -84,10 +84,10 @@ inline bool Pool2DInferLayout(const NodeAttrs& attrs,
   Layout layout(param.layout);
   if (layout.IsAxisFactorComplete() || !layout.Compatible(input)) {
     layout.CompleteAxisFactor(1);
-    ilayouts->at(0) = layout;
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, layout);
   }
 
-  olayouts->at(0) = ilayouts->at(0);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, ilayouts->at(0));
 
   return true;
 }
@@ -261,10 +261,10 @@ inline bool GlobalPool2DInferLayout(const NodeAttrs& attrs,
   Layout layout(param.layout);
   if (layout.IsAxisFactorComplete() || !layout.Compatible(input)) {
     layout.CompleteAxisFactor(1);
-    ilayouts->at(0) = layout;
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, layout);
   }
 
-  olayouts->at(0) = ilayouts->at(0);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, ilayouts->at(0));
 
   return true;
 }

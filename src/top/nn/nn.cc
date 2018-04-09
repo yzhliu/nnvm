@@ -86,7 +86,7 @@ If ``use_bias`` is set to be false, then the ``bias`` term is ignored.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<DenseParam>)
 .set_attr<FInferShape>("FInferShape", DenseInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>) // fix input data layout
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -179,7 +179,7 @@ NNVM_REGISTER_OP(dropout)
 .set_num_outputs(2)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 2>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 2>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
 .set_attr<FNumVisibleOutputs>("FNumVisibleOutputs", [](const NodeAttrs& attrs) {
     return 1;
   })
@@ -202,19 +202,76 @@ inline bool BatchNormInferShape(const nnvm::NodeAttrs& attrs,
   if (dshape.ndim() == 0) return false;
   CHECK((size_t)param.axis < dshape.Size());
 
-  int arg_size = dshape[param.axis];
-  if (dshape.ndim() == 5) {
-    // nChwc
-    arg_size *= dshape[4];
-  }
-  TShape bshape({arg_size});
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 1, bshape);
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 2, bshape);
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 3, bshape);
-  NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, 4, bshape);
+  TShape bshape({dshape[param.axis]});
+  if (in_shape->at(1).ndim() == 0) in_shape->at(1) = bshape;
+  if (in_shape->at(2).ndim() == 0) in_shape->at(2) = bshape;
+  if (in_shape->at(3).ndim() == 0) in_shape->at(3) = bshape;
+  if (in_shape->at(4).ndim() == 0) in_shape->at(4) = bshape;
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, dshape);
-  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 1, bshape);
-  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 2, bshape);
+  out_shape->at(1) = in_shape->at(3);
+  out_shape->at(2) = in_shape->at(4);
+  return true;
+}
+
+inline bool BatchNormInferLayout(const NodeAttrs& attrs,
+                                 std::vector<Layout> *in_layouts,
+                                 const std::vector<Layout> *last_in_layouts,
+                                 std::vector<Layout> *out_layouts) {
+  const BatchNormParam& param = nnvm::get<BatchNormParam>(attrs.parsed);
+  CHECK_EQ(in_layouts->size(), 5U);
+  CHECK_EQ(last_in_layouts->size(), 5U);
+  CHECK_EQ(out_layouts->size(), 3U);
+
+  const Layout& data_layout = in_layouts->at(0);
+  const Layout& origin_data_layout = last_in_layouts->at(0);
+  Layout param_layout("C");
+  if (data_layout.IsDefined()) {
+    bool need_layout_convert = false;
+    if (data_layout.PosMajor('C') != param.axis) {
+      CHECK(origin_data_layout.IsDefined())
+        << "Channel in data layout " << data_layout
+        << " is not at index " << param.axis;
+      // convert it to the original one.
+      need_layout_convert = true;
+      NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
+    } else if (data_layout.PosMinor('c') >= 0 &&
+               data_layout.PosMinor('c') != data_layout.ndim()-1) {
+      CHECK(origin_data_layout.IsDefined())
+        << "sub-channel c in data layout " << data_layout
+        << " does not at the final dimension";
+      // convert it to the original one.
+      need_layout_convert = true;
+      NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
+    } else {
+      for (Layout::LayoutAxis axis : data_layout) {
+        if (Layout::IsMinorAxis(axis) && axis != 'c') {
+          CHECK(origin_data_layout.IsDefined())
+            << "sub-axis other than c appears in data layout " << data_layout;
+          // convert it to the original one.
+          need_layout_convert = true;
+          NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
+          break;
+        }
+      }
+    }
+    if (!need_layout_convert
+        && origin_data_layout.IsDefined()
+        && data_layout != origin_data_layout) {
+      auto channel_block = data_layout.FactorSize('C');
+      if (channel_block > 0) {
+        param_layout = ("C" + std::to_string(channel_block) + "c");
+      }
+    }
+  }
+
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 1, param_layout);
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 2, param_layout);
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 3, param_layout);
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 4, param_layout);
+
+  NNVM_ASSIGN_LAYOUT(*out_layouts, 0, in_layouts->at(0));
+  NNVM_ASSIGN_LAYOUT(*out_layouts, 1, param_layout);
+  NNVM_ASSIGN_LAYOUT(*out_layouts, 2, param_layout);
   return true;
 }
 
@@ -262,7 +319,7 @@ axis to be the last item in the input shape.
 .add_arguments(BatchNormParam::__FIELDS__())
 .set_attr_parser(ParamParser<BatchNormParam>)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<BatchNormParam>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)  // fix input data layout
+.set_attr<FInferLayout>("FInferLayout", BatchNormInferLayout)
 .set_num_inputs(5)
 .set_num_outputs(3)
 .set_attr<FInferShape>("FInferShape", BatchNormInferShape)
@@ -300,7 +357,7 @@ NNVM_REGISTER_OP(softmax)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
 .set_support_level(1)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
@@ -358,7 +415,7 @@ NNVM_REGISTER_OP(log_softmax)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -418,7 +475,7 @@ NNVM_REGISTER_OP(leaky_relu)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<-1, -1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseArbitraryLayout<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -482,7 +539,7 @@ NNVM_REGISTER_OP(pad)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", PadInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayout<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutCopyToOut<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,

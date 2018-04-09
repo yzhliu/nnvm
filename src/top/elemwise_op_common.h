@@ -102,11 +102,13 @@ inline bool ElementWiseReduceType(const NodeAttrs& attrs,
     attrs, in_attrs, out_attrs, -1);
 }
 
+using FInferOutLayout = std::function<Layout(const Layout& in)>;
 template<int n_in, int n_out>
 inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
                                 std::vector<Layout> *in_layouts,
                                 const std::vector<Layout> *last_in_layouts,
-                                std::vector<Layout> *out_layouts) {
+                                std::vector<Layout> *out_layouts,
+                                const FInferOutLayout& finfer) {
   const size_t in_size = (n_in == -1) ? in_layouts->size() : static_cast<size_t>(n_in);
   const size_t out_size = (n_out == -1) ? out_layouts->size() : static_cast<size_t>(n_out);
 
@@ -136,18 +138,39 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
   // to insert an layout_transform node to fix the input layout.
   else in = last_in;
 
-  if (!in.IsDefined()) in = out;
-  out = in;
+  out = finfer(in);
 
   auto write = [](std::vector<Layout> *vec, Layout& value, size_t size) {
     for (size_t i = 0; i < size; ++i) {
       vec->at(i) = value;
     }
   };
-  write(in_layouts, in, in_size);
-  write(out_layouts, out, out_size);
+  if (in.IsDefined()) write(in_layouts, in, in_size);
+  if (out.IsDefined()) write(out_layouts, out, out_size);
 
   return true;
+}
+
+template<int n_in, int n_out>
+inline bool ElemwiseFixedLayoutCopyToOut(const NodeAttrs& attrs,
+                                         std::vector<Layout> *in_layouts,
+                                         const std::vector<Layout> *last_in_layouts,
+                                         std::vector<Layout> *out_layouts) {
+  return ElemwiseFixedLayout<n_in, n_out>(
+    attrs, in_layouts, last_in_layouts, out_layouts, [](const Layout& in) {
+    return in;
+  });
+}
+
+template<int n_in, int n_out>
+inline bool ElemwiseFixedLayoutUnknownOut(const NodeAttrs& attrs,
+                                          std::vector<Layout> *in_layouts,
+                                          const std::vector<Layout> *last_in_layouts,
+                                          std::vector<Layout> *out_layouts) {
+  return ElemwiseFixedLayout<n_in, n_out>(
+    attrs, in_layouts, last_in_layouts, out_layouts, [](const Layout& in) {
+    return Layout::Undef();
+  });
 }
 
 template<int n_in, int n_out>
@@ -167,8 +190,10 @@ inline bool ElemwiseArbitraryLayout(const NodeAttrs& attrs,
       << ", got " << in_layouts->at(i);
   }
 
-  for (size_t i = 0; i < out_size; ++i) {
-    out_layouts->at(i) = in;
+  if (in.IsDefined()) {
+    for (size_t i = 0; i < out_size; ++i) {
+      out_layouts->at(i) = in;
+    }
   }
 
   return true;
@@ -184,10 +209,8 @@ inline bool ElemwiseBinaryKeepLeftLayout(const NodeAttrs& attrs,
   const Layout& lhs = (*in_layouts)[0];
   const Layout& rhs = (*in_layouts)[1];
 
-  const Layout& out = (*out_layouts)[0];
-
   if (!lhs.IsDefined() && !rhs.IsDefined()) {
-    return !out.IsDefined();
+    return true;
   } else if (!lhs.IsDefined()) {
     in_layouts->at(0) = rhs;
     out_layouts->at(0) = rhs;
@@ -268,7 +291,7 @@ inline bool ElemwiseBinaryKeepLeftLayout(const NodeAttrs& attrs,
   .set_attr<nnvm::FInferShape>("FInferShape",                       \
     ElementWiseReduceShape)                                         \
   .set_attr<FInferLayout>("FInferLayout",                           \
-    ElemwiseFixedLayout<1, 1>)                                      \
+    ElemwiseFixedLayoutCopyToOut<1, 1>)                             \
   .set_attr<nnvm::FInferType>("FInferType", ElementWiseReduceType)  \
   .add_argument("args", "Symbol[]", "Positional input arguments")
 
@@ -286,7 +309,7 @@ inline bool ElemwiseBinaryKeepLeftLayout(const NodeAttrs& attrs,
       return true;                                                  \
   })                                                                \
   .set_attr<FInferLayout>("FInferLayout",                           \
-    ElemwiseFixedLayout<1, 1>)                                      \
+    ElemwiseFixedLayoutUnknownOut<1, 1>)                            \
   .set_attr<FGradient>(                                             \
     "FGradient", [](const NodePtr& n,                               \
                     const std::vector<NodeEntry>& ograds) {         \

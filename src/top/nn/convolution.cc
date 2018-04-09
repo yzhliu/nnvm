@@ -141,23 +141,23 @@ inline bool Conv2DInferLayout(const NodeAttrs& attrs,
   const Layout kernel_layout(param.kernel_layout);
   if (param.use_bias) {
     CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
-    ilayouts->at(0) = in_layout;
-    ilayouts->at(1) = kernel_layout;
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, in_layout);
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 1, kernel_layout);
     // automatically decide bias layout
     std::string bias_layout("C");
     auto oc_block = out_layout.FactorSize('C');
     if (oc_block > 0) {
       bias_layout = bias_layout + std::to_string(oc_block) + "c";
     }
-    ilayouts->at(2) = bias_layout;
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 2, Layout(bias_layout));
   } else {
     CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
-    ilayouts->at(0) = in_layout;
-    ilayouts->at(1) = kernel_layout;
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, in_layout);
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 1, kernel_layout);
   }
 
   CHECK_EQ(olayouts->size(), 1U);
-  olayouts->at(0) = out_layout;
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, out_layout);
 
   return true;
 }

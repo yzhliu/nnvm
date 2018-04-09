@@ -155,9 +155,6 @@ def optimize(graph, shape, dtype="float32", layout=None):
     """
     # pylint: disable=unused-argument
     cfg = BuildConfig.current
-    if cfg.pass_enabled("SimplifyInference"):
-        graph = graph_attr.set_shape_inputs(graph, shape)
-        graph = graph.apply(["InferShape", "SimplifyInference"])
 
     if cfg.pass_enabled("OpPacking"):
         layout = layout if layout else {}
@@ -169,6 +166,10 @@ def optimize(graph, shape, dtype="float32", layout=None):
         graph = graph.apply(["InferShape", "InferType", "PrePack"])
         graph = graph_attr.set_layout_inputs(graph, layout)
         graph = graph.apply(["LayoutTransform"])
+
+    if cfg.pass_enabled("SimplifyInference"):
+        graph = graph_attr.set_shape_inputs(graph, shape)
+        graph = graph.apply(["InferShape", "SimplifyInference"])
 
     if cfg.pass_enabled("FoldScaleAxis"):
         graph = graph_attr.set_shape_inputs(graph, shape)
@@ -242,12 +243,12 @@ def build(graph, target=None, shape=None, dtype="float32",
     shape, dtype = _update_shape_dtype(shape, dtype, params)
 
     # fix layout if necessary
-    if layout:
-        graph = graph_attr.set_layout_inputs(graph, layout)
-        graph = graph.apply("LayoutTransform")
-        index = graph.index
-        layouts = graph.json_attr("layout")
-        layout = {x : layouts[index.entry_id(x)] for x in index.input_names}
+    layout = layout if layout else {}
+    graph = graph_attr.set_layout_inputs(graph, layout)
+    graph = graph.apply("LayoutTransform")
+    index = graph.index
+    layouts = graph.json_attr("layout")
+    layout = {x : layouts[index.entry_id(x)] for x in index.input_names}
 
     # Initial pass do shape type inference
     ishape, _ = graph_util.infer_shape(graph, **shape)

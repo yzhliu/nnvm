@@ -203,6 +203,13 @@ inline std::string attr_assign_error_msg(const NodeAttrs& attrs,
     }                                                                    \
   }
 
+#define NNVM_ASSIGN_LAYOUT(outputs, index, layout)                       \
+  {                                                                      \
+    if (layout.IsDefined()) {                                            \
+      (outputs)[index] = layout;                                         \
+    }                                                                    \
+  }
+
 /*!
  * \brief macro assign rhs shape to lhs
  *  Use macro so we can see the error file more clearly
