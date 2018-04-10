@@ -1,11 +1,10 @@
 """Definition of object detection ops"""
 from __future__ import absolute_import
 
-import tvm
 import topi
+import tvm
 from . import registry as reg
 from .registry import OpPattern
-from .tensor import _fschedule_broadcast
 
 # multibox_prior
 @reg.register_schedule("multibox_prior")

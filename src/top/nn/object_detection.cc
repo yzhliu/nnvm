@@ -27,7 +27,8 @@ bool MultiBoxPriorShape(const NodeAttrs& attrs,
   const MultiBoxPriorParam& param = nnvm::get<MultiBoxPriorParam>(attrs.parsed);
   CHECK_EQ(in_attrs->size(), 1U) << "Inputs: [data]" << in_attrs->size();
   TShape dshape = in_attrs->at(0);
-  CHECK_GE(dshape.ndim(), 4U) << "Input data should be 4D: [batch, channel, height, width]";
+  CHECK_GE(dshape.ndim(), 4U) << "Input data should be 4D: "
+      "[batch, channel, height, width]";
   int in_height = dshape[2];
   CHECK_GT(in_height, 0) << "Input height should > 0";
   int in_width = dshape[3];
@@ -40,7 +41,8 @@ bool MultiBoxPriorShape(const NodeAttrs& attrs,
   oshape[1] = in_height * in_width * (num_sizes + num_ratios - 1);
   oshape[2] = 4;
   CHECK_EQ(param.steps.ndim(), 2) << "Step ndim must be 2: (step_y, step_x)";
-  CHECK_GE(param.steps[0] * param.steps[1], 0) << "Must specify both step_y and step_x";
+  CHECK_GE(param.steps[0] * param.steps[1], 0) << "Must specify both "
+      "step_y and step_x";
   out_attrs->clear();
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_attrs, 0, oshape);
   return true;
@@ -49,7 +51,6 @@ bool MultiBoxPriorShape(const NodeAttrs& attrs,
 NNVM_REGISTER_OP(multibox_prior)
   .describe(R"doc("Generate prior(anchor) boxes from data, sizes and ratios."
 )doc" NNVM_ADD_FILELINE)
-.set_support_level(1)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<MultiBoxPriorParam>)
@@ -66,7 +67,8 @@ NNVM_REGISTER_OP(multibox_prior)
       {n->inputs[0]}),
       ograds[0]
     };
-});
+})
+.set_support_level(4);
 
 DMLC_REGISTER_PARAMETER(MultiBoxDetectionParam);
 
@@ -96,15 +98,18 @@ bool MultiBoxDetectionShape(const NodeAttrs& attrs,
 NNVM_REGISTER_OP(multibox_detection)
   .describe(R"doc("Convert multibox detection predictions."
 )doc" NNVM_ADD_FILELINE)
-.set_support_level(1)
 .set_num_inputs(3)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<MultiBoxDetectionParam>)
-.set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<MultiBoxDetectionParam>)
+.set_attr<FGetAttrDict>("FGetAttrDict",
+                        ParamGetAttrDict<MultiBoxDetectionParam>)
 .add_arguments(MultiBoxDetectionParam::__FIELDS__())
 .add_argument("cls_prob", "Tensor", "Class probabilities.")
 .add_argument("loc_pred", "Tensor", "Location regression predictions.")
 .add_argument("anchor", "Tensor", "Multibox prior anchor boxes")
+.set_attr<FListInputNames>("FListInputNames", [](const NodeAttrs& attrs) {
+    return std::vector<std::string>{"cls_prob", "loc_pred", "anchor"};
+})
 .set_attr<FInferShape>("FInferShape", MultiBoxDetectionShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<3, 1>)
 .set_attr<FGradient>(
@@ -118,7 +123,8 @@ NNVM_REGISTER_OP(multibox_detection)
       MakeNode("zeros_like", n->attrs.name + "_zero_grad2",
                {n->inputs[2]})
     };
-});
+})
+.set_support_level(4);
 
 }  // namespace top
 }  // namespace nnvm

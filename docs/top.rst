@@ -110,6 +110,8 @@ This level enables typical convnet models.
    nnvm.symbol.ones_like
    nnvm.symbol.zeros
    nnvm.symbol.zeros_like
+   nnvm.symbol.multibox_prior
+   nnvm.symbol.multibox_detection
 
 Detailed Definitions
 --------------------
@@ -177,3 +179,5 @@ Detailed Definitions
 .. autofunction:: nnvm.symbol.ones_like
 .. autofunction:: nnvm.symbol.zeros
 .. autofunction:: nnvm.symbol.zeros_like
+.. autofunction:: nnvm.symbol.multibox_prior
+.. autofunction:: nnvm.symbol.multibox_detection
