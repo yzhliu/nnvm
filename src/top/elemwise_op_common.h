@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <functional>
 #include <nnvm/layout.h>
 #include <nnvm/top/nn.h>
 #include "./op_common.h"
@@ -102,13 +103,12 @@ inline bool ElementWiseReduceType(const NodeAttrs& attrs,
     attrs, in_attrs, out_attrs, -1);
 }
 
-using FInferOutLayout = std::function<Layout(const Layout& in)>;
 template<int n_in, int n_out>
 inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
                                 std::vector<Layout> *in_layouts,
                                 const std::vector<Layout> *last_in_layouts,
                                 std::vector<Layout> *out_layouts,
-                                const FInferOutLayout& finfer) {
+                                const std::function<Layout(const Layout& in)>& finfer) {
   const size_t in_size = (n_in == -1) ? in_layouts->size() : static_cast<size_t>(n_in);
   const size_t out_size = (n_out == -1) ? out_layouts->size() : static_cast<size_t>(n_out);
 

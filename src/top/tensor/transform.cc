@@ -10,6 +10,7 @@
 #include <nnvm/compiler/util.h>
 #include <nnvm/top/tensor.h>
 #include <cctype>
+#include <sstream>
 #include "../op_common.h"
 #include "../elemwise_op_common.h"
 #include "topi/nn/flatten.h"
@@ -120,6 +121,22 @@ inline bool ConcatenateInferShape(const NodeAttrs& attrs,
   return dshape.Size() != 0;
 }
 
+inline bool ConcatenateInferLayout(const NodeAttrs& attrs,
+                                   std::vector<Layout> *ilayouts,
+                                   const std::vector<Layout> *last_ilayouts,
+                                   std::vector<Layout> *olayouts) {
+  CHECK_EQ(ilayouts->size(), 2U);
+  CHECK_EQ(olayouts->size(), 1U);
+  const Layout& lhs = last_ilayouts->at(0).IsDefined() ? last_ilayouts->at(0)
+                                                       : ilayouts->at(0);
+  const Layout& rhs = last_ilayouts->at(1).IsDefined() ? last_ilayouts->at(1)
+                                                       : ilayouts->at(1);
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, lhs);
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 1, rhs);
+
+  return true;
+}
+
 NNVM_REGISTER_OP(concatenate)
 .describe(R"code(Joins input arrays along a given axis.
 
@@ -157,7 +174,7 @@ Example::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<ConcatenateParam>)
 .set_attr<FInferShape>("FInferShape", ConcatenateInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<-1, 1>)
+.set_attr<FInferLayout>("FInferLayout", ConcatenateInferLayout)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -725,6 +742,39 @@ inline bool TransposeShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+inline bool TransposeInferLayout(const NodeAttrs& attrs,
+                                 std::vector<Layout> *ilayouts,
+                                 const std::vector<Layout> *last_ilayouts,
+                                 std::vector<Layout> *olayouts) {
+  const TransposeParam& param = nnvm::get<TransposeParam>(attrs.parsed);
+  CHECK_EQ(ilayouts->size(), 1U);
+  CHECK_EQ(olayouts->size(), 1U);
+
+  const Layout& input = last_ilayouts->at(0).IsDefined()
+                        ? last_ilayouts->at(0)
+                        : ilayouts->at(0);
+
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, input);
+
+  if (input.IsDefined()) {
+    std::ostringstream new_layout;
+    if (param.axes.ndim() == 0) {
+      for (size_t i = 0; i < input.ndim(); ++i) {
+        new_layout << input.at(input.ndim() - 1 - i);
+      }
+    } else {
+      CHECK_EQ(input.ndim(), param.axes.ndim());
+      for (size_t i = 0; i < input.ndim(); ++i) {
+        CHECK(param.axes[i] < input.ndim());
+        new_layout << input.at(param.axes[i]);
+      }
+    }
+    NNVM_ASSIGN_LAYOUT(*olayouts, 0, Layout(new_layout.str()));
+  }
+
+  return true;
+}
+
 NNVM_REGISTER_OP(transpose)
 .describe(R"code(Permutes the dimensions of an array.
 
@@ -760,7 +810,7 @@ Examples::
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<TransposeParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", TransposeShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", TransposeInferLayout)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_support_level(4)

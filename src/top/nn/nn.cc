@@ -86,7 +86,8 @@ If ``use_bias`` is set to be false, then the ``bias`` term is ignored.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<DenseParam>)
 .set_attr<FInferShape>("FInferShape", DenseInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
-.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutUnknownOut<1, 1>)
+// leave weight & bias layout undefined
+.set_attr<FInferLayout>("FInferLayout", ElemwiseFixedLayoutCopyToOut<1, 1>)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
@@ -601,53 +602,55 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
     const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
     CHECK_EQ(ilayouts->size(), 1U);
     CHECK_EQ(olayouts->size(), 1U);
-    ilayouts->at(0) = param.src_layout;
-    olayouts->at(0) = param.dst_layout;
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, Layout(param.src_layout));
+    NNVM_ASSIGN_LAYOUT(*olayouts, 0, Layout(param.dst_layout));
     return true;
 })
 .set_attr<FTVMCompute>(
-"FTVMCompute", [](const NodeAttrs& attrs,
-                  const Array<Tensor>& inputs,
-                  const Array<Tensor>& outputs) {
-  const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
+  "FTVMCompute", [](const NodeAttrs& attrs,
+                    const Array<Tensor>& inputs,
+                    const Array<Tensor>& outputs) {
+    const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
 
-  Layout src_layout(param.src_layout);
-  Layout dst_layout(param.dst_layout);
+    Layout src_layout(param.src_layout);
+    Layout dst_layout(param.dst_layout);
 
-  if (src_layout == dst_layout) return Array<Tensor>{ inputs[0] };
-  else if (!src_layout.IsDefined() || !dst_layout.IsDefined()) {
-    LOG(FATAL) << "cannot convert from/to undefined layout";
-  }
+    if (src_layout == dst_layout) return Array<Tensor>{ inputs[0] };
+    else if (!src_layout.IsDefined() || !dst_layout.IsDefined()) {
+      LOG(FATAL) << "cannot convert from/to undefined layout";
+    }
 
-  CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
-                                              << " to " << param.dst_layout;
-  CHECK(src_layout.IsAxisFactorComplete()) << "Src layout " << param.src_layout << " incomplete.";
-  CHECK(dst_layout.IsAxisFactorComplete()) << "Dst layout " << param.dst_layout << " incomplete.";
+    CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
+                                                << " to " << param.dst_layout;
+    CHECK(src_layout.IsAxisFactorComplete())
+      << "Src layout " << param.src_layout << " incomplete.";
+    CHECK(dst_layout.IsAxisFactorComplete())
+      << "Dst layout " << param.dst_layout << " incomplete.";
 
-  return Array<Tensor> {
-    topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
-      std::vector<Expr> dst_to_src_indices;
-      for (Layout::LayoutAxis src_axis : src_layout) {
-        int dst_major_pos = dst_layout.PosMajor(src_axis);
-        int dst_minor_pos = dst_layout.PosMinor(src_axis);
-        int32_t src_factor = src_layout.FactorSize(src_axis);
-        int32_t dst_factor = dst_layout.FactorSize(src_axis);
+    return Array<Tensor> {
+      topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
+        std::vector<Expr> dst_to_src_indices;
+        for (Layout::LayoutAxis src_axis : src_layout) {
+          int dst_major_pos = dst_layout.PosMajor(src_axis);
+          int dst_minor_pos = dst_layout.PosMinor(src_axis);
+          int32_t src_factor = src_layout.FactorSize(src_axis);
+          int32_t dst_factor = dst_layout.FactorSize(src_axis);
 
-        Expr src_index(dst_indices[dst_major_pos]);
-        if (dst_minor_pos >= 0) {
-          CHECK(dst_factor > 0);
-          src_index = src_index * dst_factor + dst_indices[dst_minor_pos];
+          Expr src_index(dst_indices[dst_major_pos]);
+          if (dst_minor_pos >= 0) {
+            CHECK(dst_factor > 0);
+            src_index = src_index * dst_factor + dst_indices[dst_minor_pos];
+          }
+          if (Layout::IsMajorAxis(src_axis) && src_factor > 0) {
+            src_index = src_index / src_factor;
+          } else if (Layout::IsMinorAxis(src_axis) && src_factor > 0) {
+            src_index = src_index % src_factor;
+          }
+          dst_to_src_indices.push_back(src_index);
         }
-        if (Layout::IsMajorAxis(src_axis) && src_factor > 0) {
-          src_index = src_index / src_factor;
-        } else if (Layout::IsMinorAxis(src_axis) && src_factor > 0) {
-          src_index = src_index % src_factor;
-        }
-        dst_to_src_indices.push_back(src_index);
-      }
-      return Array<Expr>(dst_to_src_indices);
-    })
-  };
+        return Array<Expr>(dst_to_src_indices);
+      })
+    };
 })
 .set_support_level(1);
 

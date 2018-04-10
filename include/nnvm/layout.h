@@ -79,6 +79,10 @@ class Layout {
     return !(*this == s);
   }
 
+  inline Layout operator+(const Layout& other) const {
+    return Layout(this->name_ + other.name_);
+  }
+
   static inline bool IsMajorAxis(LayoutAxis c) {
     return c >= 'A' && c <= 'Z';
   }
@@ -144,6 +148,20 @@ class Layout {
     ReGenerateName();
   }
 
+  inline Layout sublayout(size_t pos, size_t len) const {
+    if (pos < 0 || pos + len > ndim()) return Layout::Undef();
+    std::ostringstream new_layout;
+    for (size_t i = pos; i < pos + len; ++i) {
+      if (IsMinorAxis(layout_simplified_[i])) {
+        auto block_size = this->FactorSize(layout_simplified_[i]);
+        if (block_size == -1) new_layout << "_";
+        else new_layout << block_size;
+      }
+      new_layout << layout_simplified_[i];
+    }
+    return Layout(new_layout.str());
+  }
+
   using iterator = std::vector<LayoutAxis>::const_iterator;
   using reverse_iterator = std::vector<LayoutAxis>::const_reverse_iterator;
 
@@ -166,6 +184,21 @@ class Layout {
 
   inline size_t ndim() const {
     return layout_simplified_.size();
+  }
+
+  inline std::string at(size_t i) const {
+    std::ostringstream repr;
+    if (IsMinorAxis(layout_simplified_[i])) {
+      auto factor = FactorSize(layout_simplified_[i]);
+      CHECK_NE(factor, 0);
+      if (factor == -1) {
+        repr << "_";
+      } else {
+        repr << factor;
+      }
+    }
+    repr << layout_simplified_[i];
+    return repr.str();
   }
 
   inline int32_t PosMajor(LayoutAxis c) const {

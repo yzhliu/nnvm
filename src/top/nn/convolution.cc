@@ -253,8 +253,10 @@ inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
                                       std::vector<TShape>* in_shape,
                                       std::vector<TShape>* out_shape) {
   static const Layout kNCHW("NCHW");
+  static const Layout kOIHW("OIHW");
   const Conv2DTransposeParam& param = nnvm::get<Conv2DTransposeParam>(attrs.parsed);
   const Layout layout(param.layout);
+  const Layout kernel_layout(param.kernel_layout);
   if (param.use_bias) {
     CHECK_EQ(in_shape->size(), 3U) << "Input:[data, weight, bias]";
   } else {
@@ -281,7 +283,7 @@ inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
                  param.channels / param.groups,
                  param.kernel_size[0],
                  param.kernel_size[1]});
-  wshape = ConvertLayout(wshape, kNCHW, layout);
+  wshape = ConvertLayout(wshape, kOIHW, kernel_layout);
   NNVM_ASSIGN_INPUT_SHAPE(attrs, *in_shape, Conv2DTransposeParam::kWeight, wshape);
 
   if (param.use_bias) {
@@ -301,6 +303,32 @@ inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
                2 * param.padding[1] + param.output_padding[1]);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0,
                            ConvertLayout(oshape, kNCHW, layout));
+  return true;
+}
+
+inline bool Conv2DTransposeInferLayout(const NodeAttrs& attrs,
+                                       std::vector<Layout> *ilayouts,
+                                       const std::vector<Layout> *last_ilayouts,
+                                       std::vector<Layout> *olayouts) {
+  const Conv2DTransposeParam& param = nnvm::get<Conv2DTransposeParam>(attrs.parsed);
+
+  const Layout in_layout(param.layout);
+
+  const Layout kernel_layout(param.kernel_layout);
+  if (param.use_bias) {
+    CHECK_EQ(ilayouts->size(), 3U) << "Input:[data, weight, bias]";
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, in_layout);
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 1, kernel_layout);
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 2, Layout("C"));
+  } else {
+    CHECK_EQ(ilayouts->size(), 2U) << "Input:[data, weight]";
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, in_layout);
+    NNVM_ASSIGN_LAYOUT(*ilayouts, 1, kernel_layout);
+  }
+
+  CHECK_EQ(olayouts->size(), 1U);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, in_layout);
+
   return true;
 }
 
@@ -335,6 +363,7 @@ said convolution.
 .set_attr<FListInputNames>("FListInputNames", UseBiasListInputNames<Conv2DTransposeParam>)
 .set_attr<FInferShape>("FInferShape", Conv2DTransposeInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<-1, 1>)
+.set_attr<FInferLayout>("FInferLayout", Conv2DTransposeInferLayout)
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DTransposeParam>)
 .set_support_level(2);

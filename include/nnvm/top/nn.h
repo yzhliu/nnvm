@@ -167,6 +167,7 @@ struct Conv2DTransposeParam : public dmlc::Parameter<Conv2DTransposeParam> {
   TShape dilation;
   int groups;
   std::string layout;
+  std::string kernel_layout;
   bool use_bias;
 
   DMLC_DECLARE_PARAMETER(Conv2DTransposeParam) {
@@ -191,10 +192,14 @@ struct Conv2DTransposeParam : public dmlc::Parameter<Conv2DTransposeParam> {
                 "layers side by side, each seeing half the input channels, and producing"
                 "half the output channels, and both subsequently concatenated.");
     DMLC_DECLARE_FIELD(layout).set_default("NCHW")
-      .describe("Dimension ordering of data and weight. Can be 'NCHW', 'NHWC', etc."
+      .describe("Dimension ordering of data. Can be 'NCHW', 'NHWC', etc."
                 "'N', 'C', 'H', 'W' stands for batch, channel, height, and width"
                 "dimensions respectively. Convolution is applied on the 'H' and"
                 "'W' dimensions.");
+    DMLC_DECLARE_FIELD(kernel_layout).set_default("OIHW")
+      .describe("Dimension ordering of data and weight. Can be 'OIHW', 'OIHW16o16i', etc."
+                "'O', 'I', 'H', 'W' stands for num_filter, input_channel, height, and width"
+                "dimensions respectively.");
     DMLC_DECLARE_FIELD(use_bias).set_default(true)
       .describe("Whether the layer uses a bias vector.");
   }
