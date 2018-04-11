@@ -128,6 +128,72 @@ inline bool BinaryBroadcastShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
+                                       std::vector<Layout> *ilayouts,
+                                       const std::vector<Layout> *last_ilayouts,
+                                       std::vector<Layout> *olayouts) {
+  Layout lhs = (*ilayouts)[0];
+  Layout rhs = (*ilayouts)[1];
+  Layout out(Layout::Undef());
+
+  if (lhs.IsDefined() && rhs.IsDefined()) {
+    if (lhs == rhs) {
+      NNVM_ASSIGN_LAYOUT(*olayouts, 0, lhs);
+      return true;
+    }
+    // for example, NCHW <-> CHW, N16nCH16cW <-> HCW16c, etc, are broadcast-convertible
+    // but CNHW <-> CHW, NCHW16n <-> CHW are not.
+    size_t l_start = 0, r_start = 0;
+    size_t l = 0, r = 0;
+    bool find_first_match = false;
+    while (l < lhs.ndim() && r < rhs.ndim()) {
+      if (!rhs.contains(Layout::toMajorAxis(lhs[l]))) {
+        CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
+        r_start = ++r;
+      } else if (!lhs.contains(Layout::toMajorAxis(rhs[r]))) {
+        CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
+        l_start = ++l;
+      } else {
+        find_first_match = true;
+        ++l; ++r;
+      }
+    }
+    if (l_start > 0 && r_start > 0) {
+      LOG(FATAL) << lhs << " and " << rhs << " are not broadcast-convertible";
+    } else if (l_start > 0) {
+      rhs = lhs.sublayout(l_start, lhs.ndim()-l_start);
+      out = lhs;
+    } else if (r_start > 0) {
+      lhs = rhs.sublayout(r_start, rhs.ndim()-r_start);
+      out = rhs;
+    } else {
+      // prior to keep left layout
+      rhs = lhs;
+      out = lhs;
+    }
+  } else if (lhs.IsDefined()) {
+    const Layout& last_lhs = last_ilayouts->at(0);
+    if (last_lhs.IsDefined()) {
+      CHECK(lhs.Convertible(last_lhs)) << "current lhs layout " << lhs
+                                       << " cannot be converted to the original one " << last_lhs;
+      lhs = last_lhs;
+      // cannot decide output layout
+    }
+  } else if (rhs.IsDefined()) {
+    const Layout& last_rhs = last_ilayouts->at(1);
+    if (last_rhs.IsDefined()) {
+      CHECK(rhs.Convertible(last_rhs)) << "current rhs layout " << rhs
+                                       << " cannot be converted to the original one " << last_rhs;
+      rhs = last_rhs;
+      // cannot decide output layout
+    }
+  }
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, lhs);
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 1, rhs);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, out);
+  return true;
+}
+
 #define NNVM_REGISTER_BINARY_BROADCAST_OP(name)                     \
   NNVM_REGISTER_OP(name)                                            \
   .set_num_inputs(2)                                                \
@@ -135,7 +201,7 @@ inline bool BinaryBroadcastShape(const nnvm::NodeAttrs& attrs,
   .set_attr<FInferShape>("FInferShape", BinaryBroadcastShape)       \
   .set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)           \
   .set_attr<FInferLayout>("FInferLayout",                           \
-    ElemwiseBinaryKeepLeftLayout)                                   \
+    BinaryBroadcastInferLayout)                                     \
   .set_attr<FInplaceOption>("FInplaceOption",                       \
     [](const NodeAttrs& attrs) {                                    \
       return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \

@@ -91,6 +91,16 @@ class Layout {
     return c >= 'a' && c <= 'z';
   }
 
+  static inline LayoutAxis toMajorAxis(LayoutAxis c) {
+    if (IsMinorAxis(c)) return c - 'a' + 'A';
+    else return c;
+  }
+
+  static inline LayoutAxis toMinorAxis(LayoutAxis c) {
+    if (IsMajorAxis(c)) return c - 'A' + 'a';
+    else return c;
+  }
+
   static inline const Layout& Undef() {
     static Layout undef;
     return undef;
@@ -220,6 +230,15 @@ class Layout {
     CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
     int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
     return minor_factor_[idx];
+  }
+
+  inline bool contains(LayoutAxis axis) const {
+    if (IsMajorAxis(axis)) {
+      return major_position_[axis-'A'] >= 0;
+    } else if (IsMinorAxis(axis)) {
+      return minor_position_[axis-'a'] >= 0;
+    }
+    return false;
   }
 
   inline const LayoutAxis operator[](size_t i) const {
