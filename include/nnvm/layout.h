@@ -91,12 +91,12 @@ class Layout {
     return c >= 'a' && c <= 'z';
   }
 
-  static inline LayoutAxis toMajorAxis(LayoutAxis c) {
+  static inline LayoutAxis ToMajorAxis(LayoutAxis c) {
     if (IsMinorAxis(c)) return c - 'a' + 'A';
     else return c;
   }
 
-  static inline LayoutAxis toMinorAxis(LayoutAxis c) {
+  static inline LayoutAxis ToMinorAxis(LayoutAxis c) {
     if (IsMajorAxis(c)) return c - 'A' + 'a';
     else return c;
   }
@@ -115,6 +115,7 @@ class Layout {
     std::swap(major_position_, other.major_position_);
     std::swap(minor_position_, other.minor_position_);
     std::swap(minor_factor_, other.minor_factor_);
+    std::swap(layout_simplified_, other.layout_simplified_);
   }
 
   inline bool Convertible(const Layout &dst) const {
@@ -128,48 +129,37 @@ class Layout {
     return true;
   }
 
-  inline bool Compatible(const Layout &other) const {
-    return layout_simplified_ == other.layout_simplified_;
-  }
-
-  inline bool IsAxisFactorComplete() const {
-    if (!IsDefined()) return false;
-    for (size_t i = 0; i < kUniqueAxis; ++i) {
-      if (minor_factor_[i] == -1) return false;
-    }
-    return true;
-  }
-
-  inline void CompleteAxisFactor(int64_t factor) {
-    if (factor <= 0 || IsAxisFactorComplete()) return;
-    for (size_t i = 0;i < kUniqueAxis; ++i) {
-      if (minor_factor_[i] == -1) minor_factor_[i] = factor;
-    }
-    ReGenerateName();
-  }
-
-  inline void SetAxisFactor(LayoutAxis axis, int64_t factor) {
-    CHECK_GT(factor, 0);
-    CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
-    int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
-    CHECK(minor_position_[idx] >= 0) << "Missing axis " << static_cast<char>(idx + 'a')
-                                     << " in layout " << name_;
-    minor_factor_[idx] = factor;
-    ReGenerateName();
-  }
-
   inline Layout sublayout(size_t pos, size_t len) const {
     if (pos < 0 || pos + len > ndim()) return Layout::Undef();
     std::ostringstream new_layout;
     for (size_t i = pos; i < pos + len; ++i) {
       if (IsMinorAxis(layout_simplified_[i])) {
         auto block_size = this->FactorSize(layout_simplified_[i]);
-        if (block_size == -1) new_layout << "_";
-        else new_layout << block_size;
+        CHECK_LT(block_size, 0);
+        new_layout << block_size;
       }
       new_layout << layout_simplified_[i];
     }
     return Layout(new_layout.str());
+  }
+
+  inline Layout split(LayoutAxis axis, size_t target_pos, uint32_t size) {
+    CHECK(target_pos <= this->ndim()) << "Invalid split position "
+                                      << target_pos << " for layout " << name_;
+    CHECK(IsMajorAxis(axis)) << "Cannot split a minor axis " << axis;
+    CHECK(this->contains(axis)) << "Axis " << axis << " does not exist in " << name_;
+    CHECK(!this->contains(ToMinorAxis(axis))) << "Axis " << axis << " already split in " << name_;
+    CHECK(size > 0) << "Invalid split size " << size;
+    std::ostringstream new_layout;
+    for (size_t i = 0; i <= this->ndim(); ++i) {
+      if (i == target_pos) {
+        new_layout << size << Layout::ToMinorAxis(axis);
+      }
+      if (i == this->ndim()) break;
+      new_layout << this->at(i);
+    }
+    Layout x(new_layout.str());
+    return x;
   }
 
   using iterator = std::vector<LayoutAxis>::const_iterator;
@@ -200,12 +190,8 @@ class Layout {
     std::ostringstream repr;
     if (IsMinorAxis(layout_simplified_[i])) {
       auto factor = FactorSize(layout_simplified_[i]);
-      CHECK_NE(factor, 0);
-      if (factor == -1) {
-        repr << "_";
-      } else {
-        repr << factor;
-      }
+      CHECK_LT(factor, 0);
+      repr << factor;
     }
     repr << layout_simplified_[i];
     return repr.str();
@@ -287,18 +273,6 @@ class Layout {
   int64_t minor_factor_[kUniqueAxis];
   std::vector<LayoutAxis> layout_simplified_;
 
-  inline void ReGenerateName() {
-    std::ostringstream new_name;
-    for (LayoutAxis c : layout_simplified_) {
-      if (IsMinorAxis(c)) {
-        if (minor_factor_[c-'a'] != -1) new_name << minor_factor_[c-'a'];
-        else new_name << '_';
-      }
-      new_name << c;
-    }
-    name_ = new_name.str();
-  }
-
   void parse(const std::string& layout) {
     name_ = layout;
     if (layout == "__undef__") return;
@@ -335,9 +309,6 @@ class Layout {
       } else if (c >= '0' && c <= '9') {
         CHECK(factor >= 0) << "Invalid layout " << layout << ": _ is adjacent to a number.";
         factor = factor * 10 + c - '0';
-      } else if (c == '_') {
-        CHECK_EQ(factor, 0) << "Invalid layout " << layout << ": _ is adjacent to a number.";
-        factor = -1;
       } else {
         LOG(FATAL) << "Invalid layout " << layout;
       }

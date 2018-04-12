@@ -32,16 +32,14 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
 
-  Layout layout(param.layout);
-  CHECK_EQ(dshape.ndim(), layout.ndim()) << "Input shape ndim " << dshape.ndim()
-                                         << " does not match layout " << layout;
+  CHECK(dshape.ndim() == 4U || dshape.ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
 
-  if (!layout.IsAxisFactorComplete()) {
-    for (size_t i = 0; i < layout.ndim(); ++i) {
-      if (Layout::IsMinorAxis(layout[i])) {
-        layout.SetAxisFactor(layout[i], dshape[i]);
-      }
-    }
+  Layout layout(param.layout);
+  CHECK(layout.Convertible(kNCHW)) << "Invalid layout " << layout;
+  if (dshape.ndim() == 5U) {
+    layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
   }
 
   dshape = ConvertLayout(dshape, layout, kNCHW);
@@ -79,15 +77,25 @@ inline bool Pool2DInferLayout(const NodeAttrs& attrs,
   CHECK_EQ(last_ilayouts->size(), 1);
   CHECK_EQ(olayouts->size(), 1);
 
-  const Layout &input = ilayouts->at(0);
+  Layout input = (*ilayouts)[0];
+  const Layout layout(param.layout);
 
-  Layout layout(param.layout);
-  if (layout.IsAxisFactorComplete() || !layout.Compatible(input)) {
-    layout.CompleteAxisFactor(1);
-    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, layout);
+  if (input.IsDefined()) {
+    CHECK(input.Convertible(layout)) << "Invalid input layout " << input;
+    for (uint32_t i = 0; i < input.ndim(); ++i) {
+      if (Layout::IsMinorAxis(input[i]) &&
+          (i != input.ndim()-1 || input[i] != 'c')) {
+        // only support split on channel (C) and put it to the last dimension.
+        input = layout;
+        break;
+      }
+    }
+  } else {
+    input = layout;
   }
 
-  NNVM_ASSIGN_LAYOUT(*olayouts, 0, ilayouts->at(0));
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, input);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, input);
 
   return true;
 }
@@ -132,8 +140,9 @@ NNVM_REGISTER_OP(max_pool2d)
   CHECK_EQ(layout.PosMinor('H'), -1) << "max_pool2d does not support input split on height";
   CHECK_EQ(layout.PosMinor('W'), -1) << "max_pool2d does not support input split on width";
 
-  CHECK(inputs[0].ndim() == layout.ndim())
-    << "input ndim " << inputs[0].ndim() << " does not match layout " << layout;
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
 
   return Array<Tensor>{
     topi::nn::pool(inputs[0], pool_size, strides, padding,
@@ -202,8 +211,9 @@ NNVM_REGISTER_OP(avg_pool2d)
   CHECK_EQ(layout.PosMinor('H'), -1) << "avg_pool2d does not support input split on height";
   CHECK_EQ(layout.PosMinor('W'), -1) << "avg_pool2d does not support input split on width";
 
-  CHECK(inputs[0].ndim() == layout.ndim())
-    << "input ndim " << inputs[0].ndim() << " does not match layout " << layout;
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
 
   return Array<Tensor>{
     topi::nn::pool(inputs[0], pool_size, strides, padding,
@@ -228,15 +238,14 @@ inline bool GlobalPool2DInferShape(const nnvm::NodeAttrs& attrs,
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
 
+  CHECK(dshape.ndim() == 4U || dshape.ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
   Layout layout(param.layout);
-  CHECK_EQ(dshape.ndim(), layout.ndim()) << "Input shape ndim " << dshape.ndim()
-                                         << " does not match layout " << layout;
-  if (!layout.IsAxisFactorComplete()) {
-    for (size_t i = 0; i < layout.ndim(); ++i) {
-      if (Layout::IsMinorAxis(layout[i])) {
-        layout.SetAxisFactor(layout[i], dshape[i]);
-      }
-    }
+  CHECK(layout.Convertible(kNCHW)) << "Invalid layout " << layout;
+  if (dshape.ndim() == 5U) {
+    layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
   }
 
   dshape = ConvertLayout(dshape, layout, kNCHW);
@@ -256,15 +265,25 @@ inline bool GlobalPool2DInferLayout(const NodeAttrs& attrs,
   CHECK_EQ(last_ilayouts->size(), 1);
   CHECK_EQ(olayouts->size(), 1);
 
-  const Layout &input = ilayouts->at(0);
+  Layout input = (*ilayouts)[0];
+  const Layout layout(param.layout);
 
-  Layout layout(param.layout);
-  if (layout.IsAxisFactorComplete() || !layout.Compatible(input)) {
-    layout.CompleteAxisFactor(1);
-    NNVM_ASSIGN_LAYOUT(*ilayouts, 0, layout);
+  if (input.IsDefined()) {
+    CHECK(input.Convertible(layout)) << "Invalid input layout " << input;
+    for (uint32_t i = 0; i < input.ndim(); ++i) {
+      if (Layout::IsMinorAxis(input[i]) &&
+          (i != input.ndim()-1 || input[i] != 'c')) {
+        // only support split on channel (C) and put it to the last dimension.
+        input = layout;
+        break;
+      }
+    }
+  } else {
+    input = layout;
   }
 
-  NNVM_ASSIGN_LAYOUT(*olayouts, 0, ilayouts->at(0));
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, input);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, input);
 
   return true;
 }
@@ -298,8 +317,9 @@ NNVM_REGISTER_OP(global_max_pool2d)
   CHECK_EQ(layout.PosMinor('W'), -1)
     << "global_max_pool2d does not support input split on width";
 
-  CHECK(inputs[0].ndim() == layout.ndim())
-    << "input ndim " << inputs[0].ndim() << " does not match layout " << layout;
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
 
   return Array<Tensor>{
     topi::nn::global_pool(inputs[0], topi::nn::kMaxPool, layout.name()) };
@@ -338,8 +358,9 @@ NNVM_REGISTER_OP(global_avg_pool2d)
   CHECK_EQ(layout.PosMinor('W'), -1)
     << "global_avg_pool2d does not support input split on width";
 
-  CHECK(inputs[0].ndim() == layout.ndim())
-    << "input ndim " << inputs[0].ndim() << " does not match layout " << layout;
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
 
   return Array<Tensor>{
     topi::nn::global_pool(inputs[0], topi::nn::kAvgPool, layout.name()) };

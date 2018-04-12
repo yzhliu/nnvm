@@ -132,6 +132,8 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
                                        std::vector<Layout> *ilayouts,
                                        const std::vector<Layout> *last_ilayouts,
                                        std::vector<Layout> *olayouts) {
+  CHECK_EQ(ilayouts->size(), 2U);
+  CHECK_EQ(olayouts->size(), 1U);
   Layout lhs = (*ilayouts)[0];
   Layout rhs = (*ilayouts)[1];
   Layout out(Layout::Undef());
@@ -147,10 +149,10 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
     size_t l = 0, r = 0;
     bool find_first_match = false;
     while (l < lhs.ndim() && r < rhs.ndim()) {
-      if (!rhs.contains(Layout::toMajorAxis(lhs[l]))) {
+      if (!rhs.contains(Layout::ToMajorAxis(lhs[l]))) {
         CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
         r_start = ++r;
-      } else if (!lhs.contains(Layout::toMajorAxis(rhs[r]))) {
+      } else if (!lhs.contains(Layout::ToMajorAxis(rhs[r]))) {
         CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
         l_start = ++l;
       } else {

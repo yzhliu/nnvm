@@ -236,7 +236,7 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
       need_layout_convert = true;
       NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
     } else if (data_layout.PosMinor('c') >= 0 &&
-               data_layout.PosMinor('c') != data_layout.ndim()-1) {
+               static_cast<uint32_t>(data_layout.PosMinor('c')) != (data_layout.ndim()-1)) {
       CHECK(origin_data_layout.IsDefined())
         << "sub-channel c in data layout " << data_layout
         << " does not at the final dimension";
@@ -622,10 +622,6 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
 
     CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
                                                 << " to " << param.dst_layout;
-    CHECK(src_layout.IsAxisFactorComplete())
-      << "Src layout " << param.src_layout << " incomplete.";
-    CHECK(dst_layout.IsAxisFactorComplete())
-      << "Dst layout " << param.dst_layout << " incomplete.";
 
     return Array<Tensor> {
       topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
@@ -633,8 +629,8 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
         for (Layout::LayoutAxis src_axis : src_layout) {
           int dst_major_pos = dst_layout.PosMajor(src_axis);
           int dst_minor_pos = dst_layout.PosMinor(src_axis);
-          int32_t src_factor = src_layout.FactorSize(src_axis);
-          int32_t dst_factor = dst_layout.FactorSize(src_axis);
+          int32_t src_factor = static_cast<int32_t>(src_layout.FactorSize(src_axis));
+          int32_t dst_factor = static_cast<int32_t>(dst_layout.FactorSize(src_axis));
 
           Expr src_index(dst_indices[dst_major_pos]);
           if (dst_minor_pos >= 0) {
