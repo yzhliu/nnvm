@@ -9,7 +9,6 @@
 #include <nnvm/pass.h>
 #include <nnvm/compiler/op_attr_types.h>
 #include <nnvm/top/nn.h>
-#include <nnvm/top/contrib/batch_norm_inference.h>
 #include "./graph_transform.h"
 #include "./pattern_util.h"
 

@@ -200,7 +200,6 @@ a bias vector is created and added to the outputs.
                         n->attrs.dict);
 });
 
-
 NNVM_REGISTER_OP(conv2d_nChwc)
 .describe(R"code(2D convolution layer (e.g. spatial convolution over images).
 )code" NNVM_ADD_FILELINE)
@@ -217,7 +216,6 @@ NNVM_REGISTER_OP(conv2d_nChwc)
 .set_num_outputs(1)
 .set_num_inputs(UseBiasNumInputs<Conv2DParam>)
 .set_support_level(2);
-
 
 NNVM_REGISTER_OP(_conv2d_grad)
   .describe(R"code(2D convolution grad.
