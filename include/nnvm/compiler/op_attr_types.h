@@ -74,7 +74,14 @@ using FTVMSchedule = std::function<
            const Array<Tensor>& outs,
            const std::string& target)>;
 
-using FTVMWeightPrepack = std::function<
+/*!
+ * \brief Modify the op node to alter its input layout.
+ *  it is invoked in AlterOpLayout pass.
+ * \param attrs The attribute of the original node.
+ * \param inputs The input symbols of the original node.
+ * \param tinfos The inferred shape and dtype of the inputs.
+ */
+using FTVMAlterOpLayout = std::function<
   Symbol(const NodeAttrs& attrs,
          const SymbolArray& inputs,
          const Array<Tensor>& tinfos)>;

@@ -13,7 +13,7 @@ OPT_PASS_LEVEL = {
     "PrecomputePrune": 2,
     "OpFusion": 1,
     "FoldScaleAxis": 3,
-    "OpPacking": 2,
+    "AlterOpLayout": 2,
 }
 
 # List of optimization pass and level when switch on
@@ -156,16 +156,16 @@ def optimize(graph, shape, dtype="float32", layout=None):
     # pylint: disable=unused-argument
     cfg = BuildConfig.current
 
-    if cfg.pass_enabled("OpPacking"):
+    if cfg.pass_enabled("AlterOpLayout"):
         layout = layout if layout else {}
         graph = graph_attr.set_layout_inputs(graph, layout)
-        graph = graph.apply(["LayoutTransform"])
+        graph = graph.apply(["InferCorrectLayout"])
 
         graph = graph_attr.set_shape_inputs(graph, shape)
         graph = graph_attr.set_dtype_inputs(graph, dtype)
-        graph = graph.apply(["InferShape", "InferType", "PrePack"])
+        graph = graph.apply(["InferShape", "InferType", "AlterOpLayout"])
         graph = graph_attr.set_layout_inputs(graph, layout)
-        graph = graph.apply(["LayoutTransform"])
+        graph = graph.apply(["InferCorrectLayout"])
 
     if cfg.pass_enabled("SimplifyInference"):
         graph = graph_attr.set_shape_inputs(graph, shape)
@@ -245,7 +245,7 @@ def build(graph, target=None, shape=None, dtype="float32",
     # fix layout if necessary
     layout = layout if layout else {}
     graph = graph_attr.set_layout_inputs(graph, layout)
-    graph = graph.apply("LayoutTransform")
+    graph = graph.apply("InferCorrectLayout")
     index = graph.index
     layouts = graph.json_attr("layout")
     layout = {x : layouts[index.entry_id(x)] for x in index.input_names}

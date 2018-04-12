@@ -1,7 +1,7 @@
 /*!
- *  Copyright (c) 2017 by Contributors
- * \file layout_transform.cc
- * \brief Transforms layout.
+ *  Copyright (c) 2018 by Contributors
+ * \file infer_amend_layout.cc
+ * \brief Infer and correct (if necessary) layout.
  */
 #include <nnvm/graph.h>
 #include <nnvm/op_attr_types.h>
@@ -10,7 +10,7 @@
 #include <nnvm/layout.h>
 
 namespace nnvm {
-namespace compiler {
+namespace pass {
 
 nnvm::NodePtr CreateLayoutTransformNode(const Layout& src,
                                         const Layout& dst) {
@@ -28,10 +28,10 @@ nnvm::NodePtr CreateLayoutTransformNode(const Layout& src,
 using LayoutAttrDict = std::unordered_map<const Node*, std::vector<Layout> >;
 
 /*!
- * \brief A simple layout transform pass that will
+ * \brief A simple layout infer pass that will
  *  insert layout transform nodes automatically.
  */
-nnvm::Graph LayoutTransform(nnvm::Graph src) {
+nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
   static auto& op_infer_layout =
     nnvm::Op::GetAttr<FInferLayout>("FInferLayout");
 
@@ -155,13 +155,13 @@ nnvm::Graph LayoutTransform(nnvm::Graph src) {
 }
 
 // register pass
-NNVM_REGISTER_PASS(LayoutTransform)
+NNVM_REGISTER_PASS(InferCorrectLayout)
 .describe("Return a layout-transformed graph of src.")
-.set_body(LayoutTransform)
+.set_body(InferCorrectLayout)
 .provide_graph_attr("layout")
 .set_change_graph(true);
 
 DMLC_JSON_ENABLE_ANY(LayoutVector, list_layout);
 
-}  // namespace compiler
+}  // namespace pass
 }  // namespace nnvm
