@@ -218,7 +218,6 @@ NNVM_REGISTER_OP(avg_pool2d)
   return Array<Tensor>{
     topi::nn::pool(inputs[0], pool_size, strides, padding,
                    topi::nn::kAvgPool, ceil_mode, layout.name())};
-
 })
 .set_num_outputs(1)
 .set_num_inputs(1)
