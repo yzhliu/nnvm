@@ -558,10 +558,10 @@ inline bool LayoutTransformInferShape(const NodeAttrs& attrs,
   const LayoutTransformParam& param = nnvm::get<LayoutTransformParam>(attrs.parsed);
   const TShape &dshape = (*in_attrs)[0];
   if (dshape.ndim() == 0) return false;
-  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_attrs, 0,
-                           ConvertLayout(dshape,
-                                         Layout(param.src_layout),
-                                         Layout(param.dst_layout)));
+  const TShape &oshape = ConvertLayout(dshape,
+                                       Layout(param.src_layout),
+                                       Layout(param.dst_layout));
+  NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_attrs, 0, oshape);
   return true;
 }
 

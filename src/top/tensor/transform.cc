@@ -125,14 +125,14 @@ inline bool ConcatenateInferLayout(const NodeAttrs& attrs,
                                    std::vector<Layout> *ilayouts,
                                    const std::vector<Layout> *last_ilayouts,
                                    std::vector<Layout> *olayouts) {
-  CHECK_EQ(ilayouts->size(), 2U);
+  CHECK_EQ(ilayouts->size(), last_ilayouts->size());
   CHECK_EQ(olayouts->size(), 1U);
-  const Layout& lhs = last_ilayouts->at(0).IsDefined() ? last_ilayouts->at(0)
-                                                       : ilayouts->at(0);
-  const Layout& rhs = last_ilayouts->at(1).IsDefined() ? last_ilayouts->at(1)
-                                                       : ilayouts->at(1);
-  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, lhs);
-  NNVM_ASSIGN_LAYOUT(*ilayouts, 1, rhs);
+
+  for (size_t i = 0; i < ilayouts->size(); ++i) {
+    const Layout& input = last_ilayouts->at(i).IsDefined() ?
+                          last_ilayouts->at(i) : ilayouts->at(i);
+    NNVM_ASSIGN_LAYOUT(*ilayouts, i, input);
+  }
 
   return true;
 }

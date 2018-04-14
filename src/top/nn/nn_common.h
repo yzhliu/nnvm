@@ -72,7 +72,12 @@ inline TShape ConvertLayout(TShape src, const Layout& src_layout, const Layout& 
 
       dst[dst_major_pos] = src_axis_size;
       if (dst_minor_pos >= 0) {
-        CHECK(dst_factor > 0);
+        CHECK_GT(dst_factor, 0);
+        CHECK_LE(dst_factor, src_axis_size) << "Converting " << src
+                                            << " from " << src_layout
+                                            << " to " << dst_factor
+                                            << ": cannot split axis size of "
+                                            << src_axis_size << " by " << dst_factor;
         dst[dst_major_pos] /= dst_factor;
         dst[dst_minor_pos] = dst_factor;
       }
