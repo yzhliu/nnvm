@@ -59,9 +59,11 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
       continue;
     }
 
+    const uint32_t num_inputs = inode.inputs.size();
+    const uint32_t num_outputs = inode.source->num_outputs();
     // set up output and input layouts
-    std::vector<Layout> request_ilayouts(new_node->num_inputs(), Layout::Undef());
-    for (size_t i = 0; i < new_node->num_inputs(); ++i) {
+    std::vector<Layout> request_ilayouts(num_inputs, Layout::Undef());
+    for (size_t i = 0; i < num_inputs; ++i) {
       const IndexedGraph::NodeEntry& input_entry = inode.inputs[i];
       const NodePtr& new_input_node = mirror_vec[input_entry.node_id];
       CHECK(new_input_node != nullptr);
@@ -74,15 +76,15 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
     // layouts produced by previous node.
     std::vector<Layout> produce_ilayouts(request_ilayouts);
     // input layouts from last pass of LayoutTransform (if apply)
-    std::vector<Layout> last_request_ilayouts(new_node->num_inputs(), Layout::Undef());
+    std::vector<Layout> last_request_ilayouts(num_inputs, Layout::Undef());
     // fill outputs by last pass of LayoutTransform (if apply)
-    std::vector<Layout> produce_olayouts(new_node->num_outputs(), Layout::Undef());
+    std::vector<Layout> produce_olayouts(num_outputs, Layout::Undef());
     if (src.HasAttr("layout")) {
       const auto& layouts = src.GetAttr<std::vector<Layout> >("layout");
-      for (uint32_t i = 0; i < new_node->num_outputs(); ++i) {
+      for (uint32_t i = 0; i < num_outputs; ++i) {
         produce_olayouts[i] = layouts[idx.entry_id(nid, i)];
       }
-      for (uint32_t i = 0; i < new_node->num_inputs(); ++i) {
+      for (uint32_t i = 0; i < num_inputs; ++i) {
         last_request_ilayouts[i] = layouts[idx.entry_id(inode.inputs[i])];
       }
     }
@@ -93,8 +95,8 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
                               << " we are not able to complete layout transform.";
     CHECK(flayout(new_node->attrs, &request_ilayouts, &last_request_ilayouts, &produce_olayouts))
         << "Layout infer fail";
-    CHECK_EQ(request_ilayouts.size(), new_node->num_inputs());
-    CHECK_EQ(produce_olayouts.size(), new_node->num_outputs());
+    CHECK_EQ(request_ilayouts.size(), num_inputs);
+    CHECK_EQ(produce_olayouts.size(), num_outputs);
 
     // update new layouts
     new_layouts[new_node.get()] = std::move(produce_olayouts);

@@ -280,6 +280,7 @@ class Layout {
     std::fill_n(major_position_, kUniqueAxis, -1);
     std::fill_n(minor_position_, kUniqueAxis, -1);
     std::fill_n(minor_factor_, kUniqueAxis, 0);
+    layout_simplified_.clear();
 
     int32_t factor = 0;
     uint32_t curr = 0;
