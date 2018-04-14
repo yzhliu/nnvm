@@ -9,6 +9,7 @@ from . import nn
 from . import transform
 from . import reduction
 from . import vision
+from . import object_detection
 
 from .registry import OpPattern
 from .registry import register_compute, register_schedule, register_pattern
