@@ -48,6 +48,17 @@ bool MultiBoxPriorShape(const NodeAttrs& attrs,
   return true;
 }
 
+inline bool MultiBoxPriorInferLayout(const NodeAttrs& attrs,
+                                     std::vector<Layout> *ilayouts,
+                                     const std::vector<Layout> *last_ilayouts,
+                                     std::vector<Layout> *olayouts) {
+  static const Layout kNCHW("NCHW");
+  CHECK_EQ(ilayouts->size(), 1U);
+  CHECK_EQ(olayouts->size(), 1U);
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, kNCHW);
+  return true;
+}
+
 NNVM_REGISTER_OP(multibox_prior)
   .describe(R"doc("Generate prior(anchor) boxes from data, sizes and ratios."
 )doc" NNVM_ADD_FILELINE)
@@ -59,6 +70,7 @@ NNVM_REGISTER_OP(multibox_prior)
 .add_argument("data", "Tensor", "Input data")
 .set_attr<FInferShape>("FInferShape", MultiBoxPriorShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", MultiBoxPriorInferLayout)
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
                   const std::vector<NodeEntry>& ograds) {

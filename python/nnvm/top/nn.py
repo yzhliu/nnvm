@@ -134,7 +134,7 @@ def schedule_conv2d_nChwc(attrs, outs, target):
     oc = attrs.get_int("channels")
     with tvm.target.create(target):
         if groups == 1:
-            return topi.generic.schedule_conv2d_nChwc(oc, (kh, kw), outs)
+            return topi.generic.schedule_conv2d_nChwc(attrs, oc, (kh, kw), outs)
         else:
             raise ValueError("not support group number > 1 for now")
 
