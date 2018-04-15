@@ -107,6 +107,22 @@ bool MultiBoxDetectionShape(const NodeAttrs& attrs,
   return true;
 }
 
+inline bool MultiBoxDetectionInferLayout(const NodeAttrs& attrs,
+                                         std::vector<Layout> *ilayouts,
+                                         const std::vector<Layout> *last_ilayouts,
+                                         std::vector<Layout> *olayouts) {
+  CHECK_EQ(ilayouts->size(), 3U);
+  CHECK_EQ(last_ilayouts->size(), 3U);
+  CHECK_EQ(olayouts->size(), 1U);
+  for (size_t i = 0; i < last_ilayouts->size(); ++i) {
+    const Layout& last_layout = last_ilayouts->at(i);
+    if (last_layout.IsDefined()) {
+      NNVM_ASSIGN_LAYOUT(*ilayouts, i, last_layout);
+    }
+  }
+  return true;
+}
+
 NNVM_REGISTER_OP(multibox_detection)
   .describe(R"doc("Convert multibox detection predictions."
 )doc" NNVM_ADD_FILELINE)
@@ -122,6 +138,7 @@ NNVM_REGISTER_OP(multibox_detection)
 .set_attr<FListInputNames>("FListInputNames", [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"cls_prob", "loc_pred", "anchor"};
 })
+.set_attr<FInferLayout>("FInferLayout", MultiBoxDetectionInferLayout)
 .set_attr<FInferShape>("FInferShape", MultiBoxDetectionShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<3, 1>)
 .set_attr<FGradient>(
