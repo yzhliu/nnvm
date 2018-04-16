@@ -47,14 +47,14 @@ inline bool DotInferLayout(const NodeAttrs& attrs,
                            std::vector<Layout> *olayouts) {
   CHECK_EQ(ilayouts->size(), 2U);
   CHECK_EQ(olayouts->size(), 1U);
-  const Layout& lhs = last_ilayouts->at(0).IsDefined() ? last_ilayouts->at(0)
+  const Layout& lhs = last_ilayouts->at(0).is_defined() ? last_ilayouts->at(0)
                                                        : ilayouts->at(0);
-  const Layout& rhs = last_ilayouts->at(1).IsDefined() ? last_ilayouts->at(1)
+  const Layout& rhs = last_ilayouts->at(1).is_defined() ? last_ilayouts->at(1)
                                                        : ilayouts->at(1);
   NNVM_ASSIGN_LAYOUT(*ilayouts, 0, lhs);
   NNVM_ASSIGN_LAYOUT(*ilayouts, 1, rhs);
 
-  if (lhs.IsDefined() && rhs.IsDefined()) {
+  if (lhs.is_defined() && rhs.is_defined()) {
     // concat lhs and rhs layout
     if (rhs.ndim() == 1) {
       NNVM_ASSIGN_LAYOUT(*olayouts, 0, lhs);

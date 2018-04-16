@@ -116,7 +116,7 @@ inline bool MultiBoxDetectionInferLayout(const NodeAttrs& attrs,
   CHECK_EQ(olayouts->size(), 1U);
   for (size_t i = 0; i < last_ilayouts->size(); ++i) {
     const Layout& last_layout = last_ilayouts->at(i);
-    if (last_layout.IsDefined()) {
+    if (last_layout.is_defined()) {
       NNVM_ASSIGN_LAYOUT(*ilayouts, i, last_layout);
     }
   }

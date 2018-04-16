@@ -37,7 +37,7 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
     << " or 5-D input (last dimension is a split of channel)";
 
   Layout layout(param.layout);
-  CHECK(layout.Convertible(kNCHW)) << "Invalid layout " << layout;
+  CHECK(layout.convertible(kNCHW)) << "Invalid layout " << layout;
   if (dshape.ndim() == 5U) {
     layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
   }
@@ -80,10 +80,10 @@ inline bool Pool2DInferLayout(const NodeAttrs& attrs,
   Layout input = (*ilayouts)[0];
   const Layout layout(param.layout);
 
-  if (input.IsDefined()) {
-    CHECK(input.Convertible(layout)) << "Invalid input layout " << input;
+  if (input.is_defined()) {
+    CHECK(input.convertible(layout)) << "Invalid input layout " << input;
     for (uint32_t i = 0; i < input.ndim(); ++i) {
-      if (Layout::IsMinorAxis(input[i]) &&
+      if (Layout::is_subdim(input[i]) &&
           (i != input.ndim()-1 || input[i] != 'c')) {
         // only support split on channel (C) and put it to the last dimension.
         input = layout;
@@ -135,10 +135,10 @@ NNVM_REGISTER_OP(max_pool2d)
   auto ceil_mode = param.ceil_mode;
 
   Layout layout(param.layout);
-  CHECK(layout.Convertible(Layout("NCHW")))
+  CHECK(layout.convertible(Layout("NCHW")))
     << "max_pool2d currently only supports layouts that are convertible from NCHW";
-  CHECK_EQ(layout.PosMinor('H'), -1) << "max_pool2d does not support input split on height";
-  CHECK_EQ(layout.PosMinor('W'), -1) << "max_pool2d does not support input split on width";
+  CHECK_EQ(layout.indexof('h'), -1) << "max_pool2d does not support input split on height";
+  CHECK_EQ(layout.indexof('w'), -1) << "max_pool2d does not support input split on width";
 
   CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
     << "Pool2D only support 4-D input (e.g., NCHW)"
@@ -206,10 +206,10 @@ NNVM_REGISTER_OP(avg_pool2d)
   auto ceil_mode = param.ceil_mode;
 
   Layout layout(param.layout);
-  CHECK(layout.Convertible(Layout("NCHW")))
+  CHECK(layout.convertible(Layout("NCHW")))
     << "avg_pool2d currently only supports layouts that are convertible from NCHW";
-  CHECK_EQ(layout.PosMinor('H'), -1) << "avg_pool2d does not support input split on height";
-  CHECK_EQ(layout.PosMinor('W'), -1) << "avg_pool2d does not support input split on width";
+  CHECK_EQ(layout.indexof('h'), -1) << "avg_pool2d does not support input split on height";
+  CHECK_EQ(layout.indexof('w'), -1) << "avg_pool2d does not support input split on width";
 
   CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
     << "Pool2D only support 4-D input (e.g., NCHW)"
@@ -242,7 +242,7 @@ inline bool GlobalPool2DInferShape(const nnvm::NodeAttrs& attrs,
     << " or 5-D input (last dimension is a split of channel)";
 
   Layout layout(param.layout);
-  CHECK(layout.Convertible(kNCHW)) << "Invalid layout " << layout;
+  CHECK(layout.convertible(kNCHW)) << "Invalid layout " << layout;
   if (dshape.ndim() == 5U) {
     layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
   }
@@ -267,10 +267,10 @@ inline bool GlobalPool2DInferLayout(const NodeAttrs& attrs,
   Layout input = (*ilayouts)[0];
   const Layout layout(param.layout);
 
-  if (input.IsDefined()) {
-    CHECK(input.Convertible(layout)) << "Invalid input layout " << input;
+  if (input.is_defined()) {
+    CHECK(input.convertible(layout)) << "Invalid input layout " << input;
     for (uint32_t i = 0; i < input.ndim(); ++i) {
-      if (Layout::IsMinorAxis(input[i]) &&
+      if (Layout::is_subdim(input[i]) &&
           (i != input.ndim()-1 || input[i] != 'c')) {
         // only support split on channel (C) and put it to the last dimension.
         input = layout;
@@ -309,11 +309,11 @@ NNVM_REGISTER_OP(global_max_pool2d)
                     const Array<Tensor>& out_info) {
   const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
   Layout layout(param.layout);
-  CHECK(layout.Convertible(Layout("NCHW")))
+  CHECK(layout.convertible(Layout("NCHW")))
     << "global_max_pool2d currently only supports layouts that are convertible from NCHW";
-  CHECK_EQ(layout.PosMinor('H'), -1)
+  CHECK_EQ(layout.indexof('h'), -1)
     << "global_max_pool2d does not support input split on height";
-  CHECK_EQ(layout.PosMinor('W'), -1)
+  CHECK_EQ(layout.indexof('w'), -1)
     << "global_max_pool2d does not support input split on width";
 
   CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
@@ -350,11 +350,11 @@ NNVM_REGISTER_OP(global_avg_pool2d)
                     const Array<Tensor>& out_info) {
   const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
   Layout layout(param.layout);
-  CHECK(layout.Convertible(Layout("NCHW")))
+  CHECK(layout.convertible(Layout("NCHW")))
     << "global_avg_pool2d currently only supports layouts that are convertible from NCHW";
-  CHECK_EQ(layout.PosMinor('H'), -1)
+  CHECK_EQ(layout.indexof('h'), -1)
     << "global_avg_pool2d does not support input split on height";
-  CHECK_EQ(layout.PosMinor('W'), -1)
+  CHECK_EQ(layout.indexof('w'), -1)
     << "global_avg_pool2d does not support input split on width";
 
   CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)

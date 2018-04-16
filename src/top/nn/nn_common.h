@@ -43,41 +43,40 @@ inline std::vector<std::string> UseBiasListInputNames(const NodeAttrs& attrs) {
  */
 inline TShape ConvertLayout(TShape src, const Layout& src_layout, const Layout& dst_layout) {
   if (src_layout == dst_layout) return src;
-  else if (!src_layout.IsDefined()) {
+  else if (!src_layout.is_defined()) {
     LOG(FATAL) << "cannot convert undefined layout to " << dst_layout;
-  } else if (!dst_layout.IsDefined()) {
+  } else if (!dst_layout.is_defined()) {
     LOG(FATAL) << "cannot convert " << src_layout << " to undefined layout";
   }
 
-  CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from "
+  CHECK(src_layout.convertible(dst_layout)) << "cannot convert from "
                                             << src_layout << " to " << dst_layout;
 
   TShape dst(dst_layout.ndim());
   for (size_t i = 0; i < src_layout.ndim(); ++i) {
-    Layout::LayoutAxis src_axis = src_layout[i];
-    if (Layout::IsMajorAxis(src_axis)) {
-      int dst_major_pos = dst_layout.PosMajor(src_axis);
-      int dst_minor_pos = dst_layout.PosMinor(src_axis);
-      int src_minor_pos = src_layout.PosMinor(src_axis);
-      int src_factor = src_layout.FactorSize(src_axis);
-      int dst_factor = dst_layout.FactorSize(src_axis);
+    Layout::LayoutDim src_dim = src_layout[i];
+    if (Layout::is_superdim(src_dim)) {
+      int dst_major_pos = dst_layout.indexof(Layout::to_superdim(src_dim));
+      int dst_minor_pos = dst_layout.indexof(Layout::to_subdim(src_dim));
+      int src_minor_pos = src_layout.indexof(Layout::to_subdim(src_dim));
+      int src_factor = src_layout.subsizeof(src_dim);
+      int dst_factor = dst_layout.subsizeof(src_dim);
 
-      uint32_t src_axis_size = src[i];
+      uint32_t src_dim_size = src[i];
       if (src_minor_pos >= 0) {
-        if (src_factor == -1) src_factor = src[src_minor_pos];
         CHECK_EQ(src_factor, src[src_minor_pos]) << "src shape " << src
                                                  << " does not agree with layout " << src_layout;
-        src_axis_size *= src_factor;
+        src_dim_size *= src_factor;
       }
 
-      dst[dst_major_pos] = src_axis_size;
+      dst[dst_major_pos] = src_dim_size;
       if (dst_minor_pos >= 0) {
         CHECK_GT(dst_factor, 0);
-        CHECK_LE(dst_factor, src_axis_size) << "Converting " << src
-                                            << " from " << src_layout
-                                            << " to " << dst_factor
-                                            << ": cannot split axis size of "
-                                            << src_axis_size << " by " << dst_factor;
+        CHECK_LE(dst_factor, src_dim_size) << "Converting " << src
+                                           << " from " << src_layout
+                                           << " to " << dst_factor
+                                           << ": cannot split dimension size of "
+                                           << src_dim_size << " by " << dst_factor;
         dst[dst_major_pos] /= dst_factor;
         dst[dst_minor_pos] = dst_factor;
       }

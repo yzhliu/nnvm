@@ -115,8 +115,8 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
   auto deduce = [&](Layout *target, const std::vector<Layout> *vec,
                     size_t size, const char *name) {
     for (size_t i = 0; i < size; ++i) {
-      if (vec->at(i).IsDefined()) {
-        if (!target->IsDefined()) {
+      if (vec->at(i).is_defined()) {
+        if (!target->is_defined()) {
           *target = vec->at(i);
         }
         CHECK_EQ(*target, vec->at(i))
@@ -132,7 +132,7 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
   deduce(&last_in, last_in_layouts, in_size, "input (last infer pass)");
   deduce(&out, out_layouts, out_size, "output");
 
-  if (!last_in.IsDefined()) last_in = in;
+  if (!last_in.is_defined()) last_in = in;
   // else we copy in_layout produced by last infer pass to in_layout,
   // and let LayoutTransform pass
   // to insert an layout_transform node to fix the input layout.
@@ -145,8 +145,8 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
       vec->at(i) = value;
     }
   };
-  if (in.IsDefined()) write(in_layouts, in, in_size);
-  if (out.IsDefined()) write(out_layouts, out, out_size);
+  if (in.is_defined()) write(in_layouts, in, in_size);
+  if (out.is_defined()) write(out_layouts, out, out_size);
 
   return true;
 }
@@ -183,14 +183,14 @@ inline bool ElemwiseArbitraryLayout(const NodeAttrs& attrs,
 
   Layout in;
   for (size_t i = 0; i < in_size; ++i) {
-    if (!in.IsDefined()) in = in_layouts->at(i);
+    if (!in.is_defined()) in = in_layouts->at(i);
     CHECK_EQ(in, in_layouts->at(i))
       << "Incompatible attr in node " << attrs.name << " at " << i
       << "-th input: expected " << in
       << ", got " << in_layouts->at(i);
   }
 
-  if (in.IsDefined()) {
+  if (in.is_defined()) {
     for (size_t i = 0; i < out_size; ++i) {
       out_layouts->at(i) = in;
     }
@@ -209,13 +209,13 @@ inline bool ElemwiseBinaryKeepLeftLayout(const NodeAttrs& attrs,
   const Layout& lhs = (*in_layouts)[0];
   const Layout& rhs = (*in_layouts)[1];
 
-  if (!lhs.IsDefined() && !rhs.IsDefined()) {
+  if (!lhs.is_defined() && !rhs.is_defined()) {
     return true;
-  } else if (!lhs.IsDefined()) {
+  } else if (!lhs.is_defined()) {
     in_layouts->at(0) = rhs;
     out_layouts->at(0) = rhs;
     return true;
-  } else if (!rhs.IsDefined()) {
+  } else if (!rhs.is_defined()) {
     in_layouts->at(1) = lhs;
     out_layouts->at(0) = lhs;
     return true;
@@ -228,7 +228,7 @@ inline bool ElemwiseBinaryKeepLeftLayout(const NodeAttrs& attrs,
     return true;
   }
 
-  CHECK(lhs.Convertible(rhs)) << "Incompatible input layout in node " << attrs.name
+  CHECK(lhs.convertible(rhs)) << "Incompatible input layout in node " << attrs.name
                               << ". lhs: " << lhs << ", rhs: " << rhs;
   in_layouts->at(1) = lhs;
   out_layouts->at(0) = lhs;

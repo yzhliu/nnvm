@@ -109,7 +109,7 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
       // insert layout_transform if necessary
       const Layout& produce = produce_ilayouts[i];
       const Layout& request = request_ilayouts[i];
-      if (produce != request && produce.IsDefined()) {
+      if (produce != request && produce.is_defined()) {
         LOG(INFO) << "Insert layout transformer for " << i << "-th input of "
                   << inode.source->op()->name << ". From " << produce << " to " << request;
         nnvm::NodePtr tnode = CreateLayoutTransformNode(produce, request);
@@ -119,7 +119,7 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
         new_node->inputs[i] = tnode_output;
         // layout produced by LayoutTransformNode
         new_layouts[tnode.get()] = {request};
-      } else if (!produce.IsDefined()) {
+      } else if (!produce.is_defined()) {
         // do reverse infer
         new_layouts[in.get()][e.index] = request;
       }

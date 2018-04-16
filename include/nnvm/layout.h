@@ -1,7 +1,13 @@
 /*!
- *  Copyright (c) 2017 by Contributors
+ *  Copyright (c) 2018 by Contributors
  * \file layout.h
  * \brief Layout expression.
+ *        The layout is composed of upper cases, lower cases and numbers,
+ *        where upper case indicates a (super-)dimension and
+ *        the corresponding lower case with factor size indicates the split (sub-)dimension.
+ *        For example, NCHW16c can describe a 5-D tensor of
+ *        [batch_size, channel, height, width, channel_block].
+ *        Here sub-dimension channel_block=16 is the split of super-dimension C (channel).
  */
 #ifndef NNVM_COMPILER_LAYOUT_H_
 #define NNVM_COMPILER_LAYOUT_H_
@@ -16,10 +22,19 @@ namespace nnvm {
 
 class Layout {
  public:
-  using LayoutAxis = char;
+  using LayoutDim = char;
 
+  /*! \brief default constructor */
   Layout() : name_("__undef__") {} // NOLINT(*)
 
+  /*!
+   * \brief construct from a string.
+   * \param layout input in layout convention:
+   *        upper case indicates a dimension and
+   *        the corresponding lower case with factor size
+   *        indicates the split dimension.
+   *        return undefined layout if "__undef__" is passed.
+   */
   inline Layout(const std::string& layout) { // NOLINT(*)
     parse(layout);
   }
@@ -79,28 +94,57 @@ class Layout {
     return !(*this == s);
   }
 
+  /*!
+   * \brief Append the current layout by another.
+   * @param other the layout to be appended
+   * @return a new layout
+   */
   inline Layout operator+(const Layout& other) const {
     return Layout(this->name_ + other.name_);
   }
 
-  static inline bool IsMajorAxis(LayoutAxis c) {
-    return c >= 'A' && c <= 'Z';
+  /*!
+   * \brief Check whether a given dimension is a super-dimension.
+   * \param dim input dimension
+   * \return Whether a given dimension is a super-dimension.
+   */
+  static inline bool is_superdim(LayoutDim dim) {
+    return dim >= 'A' && dim <= 'Z';
   }
 
-  static inline bool IsMinorAxis(LayoutAxis c) {
-    return c >= 'a' && c <= 'z';
+  /*!
+   * \brief Check whether a given dimension is a sub-dimension.
+   * \param dim input dimension
+   * \return Whether a given dimension is a sub-dimension.
+   */
+  static inline bool is_subdim(LayoutDim dim) {
+    return dim >= 'a' && dim <= 'z';
   }
 
-  static inline LayoutAxis ToMajorAxis(LayoutAxis c) {
-    if (IsMinorAxis(c)) return c - 'a' + 'A';
+  /*!
+   * \brief Convert a given dimension to super-dimension.
+   * \param dim input dimension
+   * \return The converted description.
+   */
+  static inline LayoutDim to_superdim(LayoutDim dim) {
+    if (is_subdim(dim)) return dim - 'a' + 'A';
+    else return dim;
+  }
+
+  /*!
+   * \brief Convert a given dimension to sub-dimension.
+   * \param dim input dimension
+   * \return The converted description.
+   */
+  static inline LayoutDim to_subdim(LayoutDim c) {
+    if (is_superdim(c)) return c - 'A' + 'a';
     else return c;
   }
 
-  static inline LayoutAxis ToMinorAxis(LayoutAxis c) {
-    if (IsMajorAxis(c)) return c - 'A' + 'a';
-    else return c;
-  }
-
+  /*!
+   * \brief Return an undefined layout.
+   * \return a (global) undefined layout.
+   */
   static inline const Layout& Undef() {
     static Layout undef;
     return undef;
@@ -112,29 +156,45 @@ class Layout {
    */
   inline void swap(Layout& other) {  // NOLINT(*)
     std::swap(name_, other.name_);
-    std::swap(major_position_, other.major_position_);
-    std::swap(minor_position_, other.minor_position_);
-    std::swap(minor_factor_, other.minor_factor_);
+    std::swap(superdim_pos_, other.superdim_pos_);
+    std::swap(subdim_pos_, other.subdim_pos_);
+    std::swap(subdim_size_, other.subdim_size_);
     std::swap(layout_simplified_, other.layout_simplified_);
   }
 
-  inline bool Convertible(const Layout &dst) const {
-    if (!this->IsDefined() || !dst.IsDefined()) return false;
-    for (size_t i = 0; i < kUniqueAxis; ++i) {
-      if ((major_position_[i] >= 0 && dst.major_position_[i] < 0) ||
-          (major_position_[i] < 0 && dst.major_position_[i] >= 0)) {
+  /*!
+   * \brief Two layouts are convertible only if
+   *        they have same set of super-dimensions.
+   *        e.g., NCHW, NCHW16c, NHWC are convertible between each other,
+   *        but NCHW, CHW, OIHW are not.
+   * \param dst the target layout
+   * \return Whether can be converted to dst layout.
+   */
+  inline bool convertible(const Layout &dst) const {
+    if (!this->is_defined() || !dst.is_defined()) return false;
+    for (size_t i = 0; i < kUniqueDim; ++i) {
+      if ((superdim_pos_[i] >= 0 && dst.superdim_pos_[i] < 0) ||
+          (superdim_pos_[i] < 0 && dst.superdim_pos_[i] >= 0)) {
         return false;
       }
     }
     return true;
   }
 
+  /*!
+   * \brief Returns a sublayout which is the portion of the object
+   *        that starts at dimension \p pos and spans \p len dimensions
+   *        (or until the end of the layout, whichever comes first).
+   * \param pos The start position.
+   * \param len The length of the sub-layout.
+   * \return A newly constructed Layout object.
+   */
   inline Layout sublayout(size_t pos, size_t len) const {
-    if (pos < 0 || pos + len > ndim()) return Layout::Undef();
+    if (pos + len > ndim()) len = ndim() - pos;
     std::ostringstream new_layout;
     for (size_t i = pos; i < pos + len; ++i) {
-      if (IsMinorAxis(layout_simplified_[i])) {
-        auto block_size = this->FactorSize(layout_simplified_[i]);
+      if (is_subdim(layout_simplified_[i])) {
+        auto block_size = this->subsizeof(layout_simplified_[i]);
         CHECK_LT(block_size, 0);
         new_layout << block_size;
       }
@@ -143,17 +203,26 @@ class Layout {
     return Layout(new_layout.str());
   }
 
-  inline Layout split(LayoutAxis axis, size_t target_pos, uint32_t size) {
+  /*!
+   * \brief Split \p dim by \p size and put the sub-dimension to position \p target_pos.
+   * \param dim The source dimension to be split. It must be a super-dimension.
+   * \param target_pos The target position of the newly split sub-dimension.
+   * \param size size of the sub-dimension.
+   * \return A newly constructed Layout object.
+   */
+  inline Layout split(LayoutDim dim, size_t target_pos, uint32_t size) {
     CHECK(target_pos <= this->ndim()) << "Invalid split position "
                                       << target_pos << " for layout " << name_;
-    CHECK(IsMajorAxis(axis)) << "Cannot split a minor axis " << axis;
-    CHECK(this->contains(axis)) << "Axis " << axis << " does not exist in " << name_;
-    CHECK(!this->contains(ToMinorAxis(axis))) << "Axis " << axis << " already split in " << name_;
+    CHECK(is_superdim(dim)) << "Cannot split a sub-dimension " << dim;
+    CHECK(this->contains(dim)) << "Axis " << dim << " does not exist in " << name_;
+    CHECK(!this->contains(to_subdim(dim))) << "Dimension " << dim
+                                           << " has already been split in "
+                                           << name_;
     CHECK(size > 0) << "Invalid split size " << size;
     std::ostringstream new_layout;
     for (size_t i = 0; i <= this->ndim(); ++i) {
       if (i == target_pos) {
-        new_layout << size << Layout::ToMinorAxis(axis);
+        new_layout << size << Layout::to_subdim(dim);
       }
       if (i == this->ndim()) break;
       new_layout << this->at(i);
@@ -162,8 +231,8 @@ class Layout {
     return x;
   }
 
-  using iterator = std::vector<LayoutAxis>::const_iterator;
-  using reverse_iterator = std::vector<LayoutAxis>::const_reverse_iterator;
+  using iterator = std::vector<LayoutDim>::const_iterator;
+  using reverse_iterator = std::vector<LayoutDim>::const_reverse_iterator;
 
   /*! \return begin iterator */
   inline iterator begin() const {
@@ -182,14 +251,24 @@ class Layout {
     return layout_simplified_.rend();
   }
 
+  /*! \return number of dimensions */
   inline size_t ndim() const {
     return layout_simplified_.size();
   }
 
+  /*!
+   * \brief The description of the \p i-th dimension.
+   *        If it is a sub-dimension, the size will be returned as well,
+   *        e.g., 16c. Otherwise a single character is returned, e.g., C.
+   * \param i The position
+   * \return the description of the dimension.
+   */
   inline std::string at(size_t i) const {
+    CHECK_LT(i, this->ndim()) << "position " << i
+                              << " exceeds ndim=" << this->ndim();
     std::ostringstream repr;
-    if (IsMinorAxis(layout_simplified_[i])) {
-      auto factor = FactorSize(layout_simplified_[i]);
+    if (is_subdim(layout_simplified_[i])) {
+      auto factor = subsizeof(layout_simplified_[i]);
       CHECK_LT(factor, 0);
       repr << factor;
     }
@@ -197,48 +276,67 @@ class Layout {
     return repr.str();
   }
 
-  inline int32_t PosMajor(LayoutAxis c) const {
-    if (!this->IsDefined()) return -1;
-    CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
-    int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
-    return major_position_[idx];
+  /*!
+   * \brief return the index of the input dimension.
+   *        If it is not found in the layout or the layout is undefined,
+   *        return -1.
+   * \param dim the input dimension.
+   * \return the index or -1 if not found.
+   */
+  inline int32_t indexof(LayoutDim dim) const {
+    if (!this->is_defined()) return -1;
+    else if (is_superdim(dim)) return superdim_pos_[dim - 'A'];
+    else if (is_subdim(dim)) return subdim_pos_[dim - 'a'];
+    return -1;
   }
 
-  inline int32_t PosMinor(LayoutAxis c) const {
-    if (!this->IsDefined()) return -1;
-    CHECK(IsMajorAxis(c) || IsMinorAxis(c)) << "Invalid axis " << c;
-    int idx = IsMajorAxis(c) ? c - 'A' : c - 'a';
-    return minor_position_[idx];
+  /*!
+   * \param dim the input super-dimension or sub-dimension.
+   * \return the size of the sub-dimension of \p dim (if \p dim is a super-dimension),
+   *         or the size of \p dim itself (if \p dim is a sub-dimension).
+   *         Return -1 if \p dim is not in the layout or the layout is undefined.
+   */
+  inline int64_t subsizeof(LayoutDim dim) const {
+    CHECK(is_superdim(dim) || is_subdim(dim)) << "Invalid dim " << dim;
+    if (!this->is_defined() || !this->contains(to_subdim(dim))) {
+      return -1;
+    }
+    int idx = to_subdim(dim) - 'a';
+    return subdim_size_[idx];
   }
 
-  inline int64_t FactorSize(LayoutAxis axis) const {
-    if (!this->IsDefined()) return -1;
-    CHECK(IsMajorAxis(axis) || IsMinorAxis(axis)) << "Invalid axis " << axis;
-    int idx = IsMajorAxis(axis) ? axis - 'A' : axis - 'a';
-    return minor_factor_[idx];
-  }
-
-  inline bool contains(LayoutAxis axis) const {
-    if (IsMajorAxis(axis)) {
-      return major_position_[axis-'A'] >= 0;
-    } else if (IsMinorAxis(axis)) {
-      return minor_position_[axis-'a'] >= 0;
+  /*!
+   * \brief Whether the layout contains a dimension.
+   * \param dim dimension to be checked.
+   * \return Whether the layout contains the dimension.
+   */
+  inline bool contains(LayoutDim dim) const {
+    if (is_superdim(dim)) {
+      return superdim_pos_[dim-'A'] >= 0;
+    } else if (is_subdim(dim)) {
+      return subdim_pos_[dim-'a'] >= 0;
     }
     return false;
   }
 
-  inline const LayoutAxis operator[](size_t i) const {
+  inline const LayoutDim operator[](size_t i) const {
     return layout_simplified_[i];
   }
 
-  inline bool IsDefined() const {
+  /*! \return whether the layout is defined */
+  inline bool is_defined() const {
     return name_ != "__undef__";
   }
 
+  /*! \return the string description of the layout */
   inline const std::string& name() const {
     return name_;
   }
 
+  /*!
+   * \brief Write layout in JSON format.
+   * \param writer JSONWriter
+   */
   inline void Save(dmlc::JSONWriter* writer) const {
     writer->Write(name_);
   }
@@ -265,46 +363,46 @@ class Layout {
   }
 
  private:
-  static const uint32_t kUniqueAxis = 26;
+  static const uint32_t kUniqueDim = 26;
 
   std::string name_;
-  int32_t major_position_[kUniqueAxis];
-  int32_t minor_position_[kUniqueAxis];
-  int64_t minor_factor_[kUniqueAxis];
-  std::vector<LayoutAxis> layout_simplified_;
+  int32_t superdim_pos_[kUniqueDim];
+  int32_t subdim_pos_[kUniqueDim];
+  int64_t subdim_size_[kUniqueDim];
+  std::vector<LayoutDim> layout_simplified_;
 
   void parse(const std::string& layout) {
     name_ = layout;
     if (layout == "__undef__") return;
 
-    std::fill_n(major_position_, kUniqueAxis, -1);
-    std::fill_n(minor_position_, kUniqueAxis, -1);
-    std::fill_n(minor_factor_, kUniqueAxis, 0);
+    std::fill_n(superdim_pos_, kUniqueDim, -1);
+    std::fill_n(subdim_pos_, kUniqueDim, -1);
+    std::fill_n(subdim_size_, kUniqueDim, -1);
     layout_simplified_.clear();
 
     int32_t factor = 0;
     uint32_t curr = 0;
     for (size_t i = 0; i < layout.size(); ++i) {
-      const LayoutAxis c = layout.at(i);
-      if (IsMajorAxis(c)) {
+      const LayoutDim c = layout.at(i);
+      if (is_superdim(c)) {
         int pos = c - 'A';
         CHECK_EQ(factor, 0) << "Invalid layout " << layout
-                            << ": invalid factor size " << factor << " before axis " << c;
-        CHECK_EQ(major_position_[pos], -1) << "Invalid layout " << layout
-                                           << ": duplicate axis " << c;
-        major_position_[pos] = curr++;
+                            << ": invalid factor size " << factor
+                            << " before dimension " << c;
+        CHECK_EQ(superdim_pos_[pos], -1) << "Invalid layout " << layout
+                                           << ": duplicate dimension " << c;
+        superdim_pos_[pos] = curr++;
         layout_simplified_.push_back(c);
-      } else if (IsMinorAxis(c)) {
+      } else if (is_subdim(c)) {
         int pos = c - 'a';
-        CHECK(factor > 0 || factor == -1) << "Invalid layout " << layout
-                                          << ": invalid factor size " << factor
-                                          << " for axis " << c;
-        CHECK_EQ(minor_position_[pos], -1) << "Invalid layout " << layout
-                                           << ": duplicate axis " << c;
-        CHECK_EQ(minor_factor_[pos], 0) << "Invalid layout " << layout
-                                        << ": duplicate axis " << c;
-        minor_position_[pos] = curr++;
-        minor_factor_[pos] = factor;
+        CHECK_GT(factor, 0) << "Invalid layout " << layout << ": invalid factor size "
+                            << factor << " for dimension " << c;
+        CHECK_EQ(subdim_pos_[pos], -1) << "Invalid layout " << layout
+                                           << ": duplicate dimension " << c;
+        CHECK_EQ(subdim_size_[pos], -1) << "Invalid layout " << layout
+                                         << ": duplicate dimension " << c;
+        subdim_pos_[pos] = curr++;
+        subdim_size_[pos] = factor;
         layout_simplified_.push_back(c);
         factor = 0;
       } else if (c >= '0' && c <= '9') {
@@ -315,10 +413,10 @@ class Layout {
       }
     }
     CHECK(!layout_simplified_.empty()) << "Invalid layout " << layout;
-    for (LayoutAxis axis : layout_simplified_) {
-      CHECK(IsMajorAxis(axis) || major_position_[axis-'a'] >= 0)
+    for (LayoutDim dim : layout_simplified_) {
+      CHECK(is_superdim(dim) || superdim_pos_[dim-'a'] >= 0)
         << "Invalid layout " << layout << ": missing axis "
-        << static_cast<char>(axis - 'a' + 'A');
+        << static_cast<char>(dim - 'a' + 'A');
     }
   }
 };

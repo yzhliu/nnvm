@@ -138,7 +138,7 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
   Layout rhs = (*ilayouts)[1];
   Layout out(Layout::Undef());
 
-  if (lhs.IsDefined() && rhs.IsDefined()) {
+  if (lhs.is_defined() && rhs.is_defined()) {
     if (lhs == rhs) {
       NNVM_ASSIGN_LAYOUT(*olayouts, 0, lhs);
       return true;
@@ -149,10 +149,10 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
     size_t l = 0, r = 0;
     bool find_first_match = false;
     while (l < lhs.ndim() && r < rhs.ndim()) {
-      if (!rhs.contains(Layout::ToMajorAxis(lhs[l]))) {
+      if (!rhs.contains(Layout::to_superdim(lhs[l]))) {
         CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
         r_start = ++r;
-      } else if (!lhs.contains(Layout::ToMajorAxis(rhs[r]))) {
+      } else if (!lhs.contains(Layout::to_superdim(rhs[r]))) {
         CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
         l_start = ++l;
       } else {
@@ -173,18 +173,18 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
       rhs = lhs;
       out = lhs;
     }
-  } else if (lhs.IsDefined()) {
+  } else if (lhs.is_defined()) {
     const Layout& last_lhs = last_ilayouts->at(0);
-    if (last_lhs.IsDefined()) {
-      CHECK(lhs.Convertible(last_lhs)) << "current lhs layout " << lhs
+    if (last_lhs.is_defined()) {
+      CHECK(lhs.convertible(last_lhs)) << "current lhs layout " << lhs
                                        << " cannot be converted to the original one " << last_lhs;
       lhs = last_lhs;
       // cannot decide output layout
     }
-  } else if (rhs.IsDefined()) {
+  } else if (rhs.is_defined()) {
     const Layout& last_rhs = last_ilayouts->at(1);
-    if (last_rhs.IsDefined()) {
-      CHECK(rhs.Convertible(last_rhs)) << "current rhs layout " << rhs
+    if (last_rhs.is_defined()) {
+      CHECK(rhs.convertible(last_rhs)) << "current rhs layout " << rhs
                                        << " cannot be converted to the original one " << last_rhs;
       rhs = last_rhs;
       // cannot decide output layout

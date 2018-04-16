@@ -213,27 +213,27 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
   const Layout& data_layout = in_layouts->at(0);
   const Layout& origin_data_layout = last_in_layouts->at(0);
   Layout param_layout("C");
-  if (data_layout.IsDefined()) {
+  if (data_layout.is_defined()) {
     bool need_layout_convert = false;
-    if (data_layout.PosMajor('C') != param.axis) {
-      CHECK(origin_data_layout.IsDefined())
+    if (data_layout.indexof('C') != param.axis) {
+      CHECK(origin_data_layout.is_defined())
         << "Channel in data layout " << data_layout
         << " is not at index " << param.axis;
       // convert it to the original one.
       need_layout_convert = true;
       NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
-    } else if (data_layout.PosMinor('c') >= 0 &&
-               static_cast<uint32_t>(data_layout.PosMinor('c')) != (data_layout.ndim()-1)) {
-      CHECK(origin_data_layout.IsDefined())
+    } else if (data_layout.indexof('c') >= 0 &&
+               static_cast<uint32_t>(data_layout.indexof('c')) != (data_layout.ndim()-1)) {
+      CHECK(origin_data_layout.is_defined())
         << "sub-channel c in data layout " << data_layout
         << " does not at the final dimension";
       // convert it to the original one.
       need_layout_convert = true;
       NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
     } else {
-      for (Layout::LayoutAxis axis : data_layout) {
-        if (Layout::IsMinorAxis(axis) && axis != 'c') {
-          CHECK(origin_data_layout.IsDefined())
+      for (Layout::LayoutDim axis : data_layout) {
+        if (Layout::is_subdim(axis) && axis != 'c') {
+          CHECK(origin_data_layout.is_defined())
             << "sub-axis other than c appears in data layout " << data_layout;
           // convert it to the original one.
           need_layout_convert = true;
@@ -243,9 +243,9 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
       }
     }
     if (!need_layout_convert
-        && origin_data_layout.IsDefined()
+        && origin_data_layout.is_defined()
         && data_layout != origin_data_layout) {
-      auto channel_block = data_layout.FactorSize('C');
+      auto channel_block = data_layout.subsizeof('C');
       if (channel_block > 0) {
         param_layout = ("C" + std::to_string(channel_block) + "c");
       }
@@ -601,30 +601,30 @@ the input array into an output array of shape ``(d1, d2*...*dk)``.
     Layout dst_layout(param.dst_layout);
 
     if (src_layout == dst_layout) return Array<Tensor>{ inputs[0] };
-    else if (!src_layout.IsDefined() || !dst_layout.IsDefined()) {
+    else if (!src_layout.is_defined() || !dst_layout.is_defined()) {
       LOG(FATAL) << "cannot convert from/to undefined layout";
     }
 
-    CHECK(src_layout.Convertible(dst_layout)) << "cannot convert from " << param.src_layout
+    CHECK(src_layout.convertible(dst_layout)) << "cannot convert from " << param.src_layout
                                                 << " to " << param.dst_layout;
 
     return Array<Tensor> {
       topi::layout_transform(inputs[0], outputs[0]->shape, [&](const Array<Var>& dst_indices) {
         std::vector<Expr> dst_to_src_indices;
-        for (Layout::LayoutAxis src_axis : src_layout) {
-          int dst_major_pos = dst_layout.PosMajor(src_axis);
-          int dst_minor_pos = dst_layout.PosMinor(src_axis);
-          int32_t src_factor = static_cast<int32_t>(src_layout.FactorSize(src_axis));
-          int32_t dst_factor = static_cast<int32_t>(dst_layout.FactorSize(src_axis));
+        for (Layout::LayoutDim src_axis : src_layout) {
+          int dst_major_pos = dst_layout.indexof(Layout::to_superdim(src_axis));
+          int dst_minor_pos = dst_layout.indexof(Layout::to_subdim(src_axis));
+          int32_t src_factor = static_cast<int32_t>(src_layout.subsizeof(src_axis));
+          int32_t dst_factor = static_cast<int32_t>(dst_layout.subsizeof(src_axis));
 
           Expr src_index(dst_indices[dst_major_pos]);
           if (dst_minor_pos >= 0) {
             CHECK(dst_factor > 0);
             src_index = src_index * dst_factor + dst_indices[dst_minor_pos];
           }
-          if (Layout::IsMajorAxis(src_axis) && src_factor > 0) {
+          if (Layout::is_superdim(src_axis) && src_factor > 0) {
             src_index = src_index / src_factor;
-          } else if (Layout::IsMinorAxis(src_axis) && src_factor > 0) {
+          } else if (Layout::is_subdim(src_axis) && src_factor > 0) {
             src_index = src_index % src_factor;
           }
           dst_to_src_indices.push_back(src_index);

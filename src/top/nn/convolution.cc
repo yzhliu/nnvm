@@ -38,16 +38,16 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
 
   const Layout in_layout(param.layout);
   const Layout kernel_layout(param.kernel_layout);
-  CHECK(in_layout.Convertible(kNCHW))
+  CHECK(in_layout.convertible(kNCHW))
     << "Conv only support input layouts that are convertible from NCHW."
     << " But got " << in_layout;
-  CHECK(kernel_layout.Convertible(kOIHW))
+  CHECK(kernel_layout.convertible(kOIHW))
     << "Conv only support kernel layouts that are convertible from OIHW."
     << " But got "<< kernel_layout;
 
   Layout out_layout(param.out_layout);
-  if (!out_layout.IsDefined()) out_layout = in_layout;
-  CHECK(out_layout.Convertible(kNCHW))
+  if (!out_layout.is_defined()) out_layout = in_layout;
+  CHECK(out_layout.convertible(kNCHW))
     << "Conv only support output layouts that are convertible from NCHW."
     << " But got " << out_layout;
 
@@ -85,7 +85,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
   if (param.use_bias) {
     static const Layout default_bias_layout("C");
     TShape bias_shape({param.channels});
-    auto oc_block = out_layout.FactorSize('C');
+    auto oc_block = out_layout.subsizeof('C');
     if (oc_block > 0) {
       bias_shape = ConvertLayout(bias_shape, default_bias_layout,
                                  Layout("C" + std::to_string(oc_block) + "c"));
@@ -136,7 +136,7 @@ inline bool Conv2DInferLayout(const NodeAttrs& attrs,
 
   const Layout in_layout(param.layout);
   Layout out_layout(param.out_layout);
-  if (!out_layout.IsDefined()) out_layout = in_layout;
+  if (!out_layout.is_defined()) out_layout = in_layout;
 
   const Layout kernel_layout(param.kernel_layout);
   if (param.use_bias) {
@@ -145,7 +145,7 @@ inline bool Conv2DInferLayout(const NodeAttrs& attrs,
     NNVM_ASSIGN_LAYOUT(*ilayouts, 1, kernel_layout);
     // automatically decide bias layout
     std::string bias_layout("C");
-    auto oc_block = out_layout.FactorSize('C');
+    auto oc_block = out_layout.subsizeof('C');
     if (oc_block > 0) {
       bias_layout = bias_layout + std::to_string(oc_block) + "c";
     }
