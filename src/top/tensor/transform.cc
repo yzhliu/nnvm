@@ -129,7 +129,7 @@ inline bool ConcatenateInferLayout(const NodeAttrs& attrs,
   CHECK_EQ(olayouts->size(), 1U);
 
   for (size_t i = 0; i < ilayouts->size(); ++i) {
-    const Layout& input = last_ilayouts->at(i).is_defined() ?
+    const Layout& input = last_ilayouts->at(i).defined() ?
                           last_ilayouts->at(i) : ilayouts->at(i);
     NNVM_ASSIGN_LAYOUT(*ilayouts, i, input);
   }
@@ -745,13 +745,13 @@ inline bool TransposeInferLayout(const NodeAttrs& attrs,
   CHECK_EQ(ilayouts->size(), 1U);
   CHECK_EQ(olayouts->size(), 1U);
 
-  const Layout& input = last_ilayouts->at(0).is_defined()
+  const Layout& input = last_ilayouts->at(0).defined()
                         ? last_ilayouts->at(0)
                         : ilayouts->at(0);
 
   NNVM_ASSIGN_LAYOUT(*ilayouts, 0, input);
 
-  if (input.is_defined()) {
+  if (input.defined()) {
     std::ostringstream new_layout;
     if (param.axes.ndim() == 0) {
       for (size_t i = 0; i < input.ndim(); ++i) {

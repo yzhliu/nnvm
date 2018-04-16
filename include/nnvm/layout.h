@@ -171,7 +171,7 @@ class Layout {
    * \return Whether can be converted to dst layout.
    */
   inline bool convertible(const Layout &dst) const {
-    if (!this->is_defined() || !dst.is_defined()) return false;
+    if (!this->defined() || !dst.defined()) return false;
     for (size_t i = 0; i < kUniqueDim; ++i) {
       if ((superdim_pos_[i] >= 0 && dst.superdim_pos_[i] < 0) ||
           (superdim_pos_[i] < 0 && dst.superdim_pos_[i] >= 0)) {
@@ -284,7 +284,7 @@ class Layout {
    * \return the index or -1 if not found.
    */
   inline int32_t indexof(LayoutDim dim) const {
-    if (!this->is_defined()) return -1;
+    if (!this->defined()) return -1;
     else if (is_superdim(dim)) return superdim_pos_[dim - 'A'];
     else if (is_subdim(dim)) return subdim_pos_[dim - 'a'];
     return -1;
@@ -298,7 +298,7 @@ class Layout {
    */
   inline int64_t subsizeof(LayoutDim dim) const {
     CHECK(is_superdim(dim) || is_subdim(dim)) << "Invalid dim " << dim;
-    if (!this->is_defined() || !this->contains(to_subdim(dim))) {
+    if (!this->defined() || !this->contains(to_subdim(dim))) {
       return -1;
     }
     int idx = to_subdim(dim) - 'a';
@@ -324,7 +324,7 @@ class Layout {
   }
 
   /*! \return whether the layout is defined */
-  inline bool is_defined() const {
+  inline bool defined() const {
     return name_ != "__undef__";
   }
 

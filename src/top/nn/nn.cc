@@ -213,10 +213,10 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
   const Layout& data_layout = in_layouts->at(0);
   const Layout& origin_data_layout = last_in_layouts->at(0);
   Layout param_layout("C");
-  if (data_layout.is_defined()) {
+  if (data_layout.defined()) {
     bool need_layout_convert = false;
     if (data_layout.indexof('C') != param.axis) {
-      CHECK(origin_data_layout.is_defined())
+      CHECK(origin_data_layout.defined())
         << "Channel in data layout " << data_layout
         << " is not at index " << param.axis;
       // convert it to the original one.
@@ -224,7 +224,7 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
       NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
     } else if (data_layout.indexof('c') >= 0 &&
                static_cast<uint32_t>(data_layout.indexof('c')) != (data_layout.ndim()-1)) {
-      CHECK(origin_data_layout.is_defined())
+      CHECK(origin_data_layout.defined())
         << "sub-channel c in data layout " << data_layout
         << " does not at the final dimension";
       // convert it to the original one.
@@ -233,7 +233,7 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
     } else {
       for (Layout::LayoutDim axis : data_layout) {
         if (Layout::is_subdim(axis) && axis != 'c') {
-          CHECK(origin_data_layout.is_defined())
+          CHECK(origin_data_layout.defined())
             << "sub-axis other than c appears in data layout " << data_layout;
           // convert it to the original one.
           need_layout_convert = true;
@@ -243,7 +243,7 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
       }
     }
     if (!need_layout_convert
-        && origin_data_layout.is_defined()
+        && origin_data_layout.defined()
         && data_layout != origin_data_layout) {
       auto channel_block = data_layout.subsizeof('C');
       if (channel_block > 0) {
@@ -601,7 +601,7 @@ the input array by output[n, c, h, w, C] = data[n, C*16+c, h, w]
     Layout dst_layout(param.dst_layout);
 
     if (src_layout == dst_layout) return Array<Tensor>{ inputs[0] };
-    else if (!src_layout.is_defined() || !dst_layout.is_defined()) {
+    else if (!src_layout.defined() || !dst_layout.defined()) {
       LOG(FATAL) << "cannot convert from/to undefined layout";
     }
 

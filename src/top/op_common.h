@@ -205,7 +205,7 @@ inline std::string attr_assign_error_msg(const NodeAttrs& attrs,
 
 #define NNVM_ASSIGN_LAYOUT(outputs, index, layout)                       \
   {                                                                      \
-    if (layout.is_defined()) {                                           \
+    if (layout.defined()) {                                              \
       (outputs)[index] = layout;                                         \
     }                                                                    \
   }

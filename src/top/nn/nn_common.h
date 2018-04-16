@@ -43,9 +43,9 @@ inline std::vector<std::string> UseBiasListInputNames(const NodeAttrs& attrs) {
  */
 inline TShape ConvertLayout(TShape src, const Layout& src_layout, const Layout& dst_layout) {
   if (src_layout == dst_layout) return src;
-  else if (!src_layout.is_defined()) {
+  else if (!src_layout.defined()) {
     LOG(FATAL) << "cannot convert undefined layout to " << dst_layout;
-  } else if (!dst_layout.is_defined()) {
+  } else if (!dst_layout.defined()) {
     LOG(FATAL) << "cannot convert " << src_layout << " to undefined layout";
   }
 

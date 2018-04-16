@@ -80,7 +80,7 @@ inline bool Pool2DInferLayout(const NodeAttrs& attrs,
   Layout input = (*ilayouts)[0];
   const Layout layout(param.layout);
 
-  if (input.is_defined()) {
+  if (input.defined()) {
     CHECK(input.convertible(layout)) << "Invalid input layout " << input;
     for (uint32_t i = 0; i < input.ndim(); ++i) {
       if (Layout::is_subdim(input[i]) &&
@@ -267,7 +267,7 @@ inline bool GlobalPool2DInferLayout(const NodeAttrs& attrs,
   Layout input = (*ilayouts)[0];
   const Layout layout(param.layout);
 
-  if (input.is_defined()) {
+  if (input.defined()) {
     CHECK(input.convertible(layout)) << "Invalid input layout " << input;
     for (uint32_t i = 0; i < input.ndim(); ++i) {
       if (Layout::is_subdim(input[i]) &&

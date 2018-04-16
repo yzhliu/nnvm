@@ -138,7 +138,7 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
   Layout rhs = (*ilayouts)[1];
   Layout out(Layout::Undef());
 
-  if (lhs.is_defined() && rhs.is_defined()) {
+  if (lhs.defined() && rhs.defined()) {
     if (lhs == rhs) {
       NNVM_ASSIGN_LAYOUT(*olayouts, 0, lhs);
       return true;
@@ -173,17 +173,17 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
       rhs = lhs;
       out = lhs;
     }
-  } else if (lhs.is_defined()) {
+  } else if (lhs.defined()) {
     const Layout& last_lhs = last_ilayouts->at(0);
-    if (last_lhs.is_defined()) {
+    if (last_lhs.defined()) {
       CHECK(lhs.convertible(last_lhs)) << "current lhs layout " << lhs
                                        << " cannot be converted to the original one " << last_lhs;
       lhs = last_lhs;
       // cannot decide output layout
     }
-  } else if (rhs.is_defined()) {
+  } else if (rhs.defined()) {
     const Layout& last_rhs = last_ilayouts->at(1);
-    if (last_rhs.is_defined()) {
+    if (last_rhs.defined()) {
       CHECK(rhs.convertible(last_rhs)) << "current rhs layout " << rhs
                                        << " cannot be converted to the original one " << last_rhs;
       rhs = last_rhs;

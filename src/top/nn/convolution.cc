@@ -46,7 +46,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
     << " But got "<< kernel_layout;
 
   Layout out_layout(param.out_layout);
-  if (!out_layout.is_defined()) out_layout = in_layout;
+  if (!out_layout.defined()) out_layout = in_layout;
   CHECK(out_layout.convertible(kNCHW))
     << "Conv only support output layouts that are convertible from NCHW."
     << " But got " << out_layout;
@@ -136,7 +136,7 @@ inline bool Conv2DInferLayout(const NodeAttrs& attrs,
 
   const Layout in_layout(param.layout);
   Layout out_layout(param.out_layout);
-  if (!out_layout.is_defined()) out_layout = in_layout;
+  if (!out_layout.defined()) out_layout = in_layout;
 
   const Layout kernel_layout(param.kernel_layout);
   if (param.use_bias) {
