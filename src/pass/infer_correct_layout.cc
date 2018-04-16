@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2018 by Contributors
- * \file infer_amend_layout.cc
+ * \file infer_correct_layout.cc
  * \brief Infer and correct (if necessary) layout.
  */
 #include <nnvm/graph.h>

@@ -8,8 +8,8 @@ _sym_arr_size = tvm.get_global_func("nnvm.compiler._symbol_array_size")
 class SymbolArray(object):
     """Symbol array in nnvm.
 
-    Used by python registration of weight pre-pack function.
-    SymbolArray is passed as the second argument to weight pre-pack function.
+    Used by python registration of alter_op_layout function.
+    SymbolArray is passed as the second argument to alter_op_layout function.
     """
     _tvm_tcode = 19
 

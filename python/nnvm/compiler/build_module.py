@@ -16,7 +16,7 @@ OPT_PASS_LEVEL = {
     "PrecomputePrune": 2,
     "OpFusion": 1,
     "FoldScaleAxis": 3,
-    "AlterOpLayout": 2,
+    "AlterOpLayout": 3,
 }
 
 # List of optimization pass and level when switch on

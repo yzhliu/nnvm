@@ -566,10 +566,10 @@ inline bool LayoutTransformInferShape(const NodeAttrs& attrs,
 }
 
 NNVM_REGISTER_OP(__layout_transform__)
-.describe(R"code(Flattens the input into a 2-D array.
+.describe(R"code(Transform the input data layout.
 
-For an input array with shape ``(d1, d2, ..., dk)``, `flatten` operation reshapes
-the input array into an output array of shape ``(d1, d2*...*dk)``.
+For transforming from NCHW to N16cHWC, the `__layout_transform__` operator reshapes
+the input array by output[n, c, h, w, C] = data[n, C*16+c, h, w]
 
 )code" NNVM_ADD_FILELINE)
 .set_num_inputs(1)

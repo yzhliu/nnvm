@@ -48,7 +48,6 @@ nnvm::Graph PrecomputePrune(nnvm::Graph src) {
 
   DFSVisit(src.outputs, [&](const nnvm::NodePtr& n) {
     bool can_be_pruned = true;
-//    fprintf(stderr, "DFS touch node: %s\n", n->attrs.name.c_str());
     if (n->is_variable()) {
       if (params.count(n->attrs.name)) {
         pruned.emplace(n.get());

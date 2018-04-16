@@ -5,7 +5,7 @@ from __future__ import absolute_import
 import tvm
 import topi
 from topi.util import get_const_int
-from .tensor import _fschedule_broadcast
+from .tensor import _fschedule_broadcast, _fschedule_injective
 from . import registry as reg
 from .registry import OpPattern
 
@@ -27,6 +27,11 @@ reg.register_pattern("flatten", OpPattern.INJECTIVE)
 # pad
 reg.register_schedule("pad", _fschedule_broadcast)
 reg.register_pattern("pad", OpPattern.INJECTIVE)
+
+
+# layout transform
+reg.register_schedule("__layout_transform__", _fschedule_injective)
+reg.register_pattern("__layout_transform__", OpPattern.INJECTIVE)
 
 
 @reg.register_schedule("softmax")
