@@ -297,7 +297,6 @@ def test_broadcast_binary():
     assert(ldict["y_CHW16c"][0] == "CHW16c")
     assert(ldict["z"][0] == "NCHW16c")
     # broadcast_add(HCW16c, N16nCH16cW)
-    # assume shape has been fixed
     g, ldict = infer_correct_layout(z, {"x":"HCW16c", "y":"N16nCH16cW"})
     assert(ldict["x"][0] == "HCW16c")
     assert(ldict["y"][0] == "N16nCH16cW")

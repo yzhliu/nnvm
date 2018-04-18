@@ -201,7 +201,7 @@ a bias vector is created and added to the outputs.
                         n->attrs.dict);
 });
 
-NNVM_REGISTER_OP(conv2d_nChwc)
+NNVM_REGISTER_OP(_contrib_conv2d_nChwc)
 .describe(R"code(2D convolution layer (e.g. spatial convolution over images).
 )code" NNVM_ADD_FILELINE)
 .add_argument("data", "5D Tensor", "Packed input data.")

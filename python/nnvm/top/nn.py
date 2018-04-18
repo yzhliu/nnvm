@@ -111,8 +111,8 @@ def schedule_conv2d(attrs, outs, target):
 reg.register_pattern("conv2d", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # convolution nChwc
-@reg.register_compute("conv2d_nChwc")
-def compute_conv2d_nChwc(attrs, inputs, _):
+@reg.register_compute("_contrib_conv2d_nChwc")
+def compute_contrib_conv2d_nChwc(attrs, inputs, _):
     """Compute definition of conv2d nChwc"""
     padding = attrs.get_int_tuple("padding")
     strides = attrs.get_int_tuple("strides")
@@ -131,19 +131,21 @@ def compute_conv2d_nChwc(attrs, inputs, _):
         out = topi.broadcast_add(out, bias)
     return out
 
-@reg.register_schedule("conv2d_nChwc")
-def schedule_conv2d_nChwc(attrs, outs, target):
-    """Schedule definition of conv2d"""
+@reg.register_schedule("_contrib_conv2d_nChwc")
+def schedule_contrib_conv2d_nChwc(attrs, outs, target):
+    """Schedule definition of conv2d nChwc"""
     groups = attrs.get_int("groups")
     kh, kw = attrs.get_int_tuple('kernel_size')
     oc = attrs.get_int("channels")
+    padding = attrs.get_int_tuple("padding")
+    strides = attrs.get_int_tuple("strides")
     with tvm.target.create(target):
         if groups == 1:
-            return topi.generic.schedule_conv2d_nChwc(attrs, oc, (kh, kw), outs)
+            return topi.generic.schedule_conv2d_nChwc(oc, (kh, kw), strides, padding, outs)
         else:
             raise ValueError("not support group number > 1 for now")
 
-reg.register_pattern("conv2d_nChwc", OpPattern.OUT_ELEMWISE_FUSABLE)
+reg.register_pattern("_contrib_conv2d_nChwc", OpPattern.OUT_ELEMWISE_FUSABLE)
 
 # conv2d_transpose
 @reg.register_compute("conv2d_transpose")
