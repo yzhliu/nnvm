@@ -6,12 +6,12 @@
 #ifndef NNVM_TOP_ELEMWISE_OP_COMMON_H_
 #define NNVM_TOP_ELEMWISE_OP_COMMON_H_
 
+#include <nnvm/layout.h>
+#include <nnvm/top/nn.h>
 #include <string>
 #include <vector>
 #include <utility>
 #include <functional>
-#include <nnvm/layout.h>
-#include <nnvm/top/nn.h>
 #include "./op_common.h"
 
 namespace nnvm {
@@ -132,11 +132,14 @@ inline bool ElemwiseFixedLayout(const NodeAttrs& attrs,
   deduce(&last_in, last_in_layouts, in_size, "input (last infer pass)");
   deduce(&out, out_layouts, out_size, "output");
 
-  if (!last_in.defined()) last_in = in;
-  // else we copy in_layout produced by last infer pass to in_layout,
-  // and let LayoutTransform pass
-  // to insert an layout_transform node to fix the input layout.
-  else in = last_in;
+  if (!last_in.defined()) {
+    last_in = in;
+  } else {
+    // else we copy in_layout produced by last infer pass to in_layout,
+    // and let LayoutTransform pass
+    // to insert an layout_transform node to fix the input layout.
+    in = last_in;
+  }
 
   out = finfer(in);
 

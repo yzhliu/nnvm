@@ -173,7 +173,6 @@ void Symbol::Print(std::ostream &os) const {
           }
         }
       });
-
   }
 }
 

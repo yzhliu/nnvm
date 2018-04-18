@@ -1,13 +1,19 @@
+/*!
+ *  Copyright (c) 2018 by Contributors
+ * \file alter_op_layout.cc
+ * \brief Alter the operator layouts. Keep inferred layouts (if any) from previous stages.
+ *        e.g., convolution may calculates faster with NCHW16c layout.
+ */
 #include <nnvm/pass.h>
 #include <nnvm/op_attr_types.h>
 #include <nnvm/layout.h>
-#include <algorithm>
-#include <functional>
 #include <nnvm/compiler/op_attr_types.h>
 #include <nnvm/pass_functions.h>
+#include <tvm/tvm.h>
+#include <algorithm>
+#include <functional>
 #include "./compile_engine.h"
 #include "./graph_transform.h"
-#include <tvm/tvm.h>
 
 namespace nnvm {
 namespace compiler {

@@ -246,7 +246,7 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
     if (data_layout.defined()) {
       auto channel_block = data_layout.subsizeof('C');
       if (channel_block > 0) {
-        param_layout = ("C" + std::to_string(channel_block) + "c");
+        param_layout = param_layout.split('C', 1, channel_block);
       }
     }
   }
@@ -600,8 +600,9 @@ the input array by output[n, c, h, w, C] = data[n, C*16+c, h, w]
     Layout src_layout(param.src_layout);
     Layout dst_layout(param.dst_layout);
 
-    if (src_layout == dst_layout) return Array<Tensor>{ inputs[0] };
-    else if (!src_layout.defined() || !dst_layout.defined()) {
+    if (src_layout == dst_layout) {
+      return Array<Tensor>{ inputs[0] };
+    } else if (!src_layout.defined() || !dst_layout.defined()) {
       LOG(FATAL) << "cannot convert from/to undefined layout";
     }
 
@@ -619,7 +620,7 @@ the input array by output[n, c, h, w, C] = data[n, C*16+c, h, w]
 
           Expr src_index(dst_indices[dst_major_pos]);
           if (dst_minor_pos >= 0) {
-            CHECK(dst_factor > 0);
+            CHECK_GT(dst_factor, 0);
             src_index = src_index * dst_factor + dst_indices[dst_minor_pos];
           }
           if (Layout::is_superdim(src_axis) && src_factor > 0) {

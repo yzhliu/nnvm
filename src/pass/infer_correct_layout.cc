@@ -50,7 +50,7 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
       auto input_iter = std::find(
         idx.input_nodes().cbegin(), idx.input_nodes().cend(), nid);
       CHECK(input_iter != idx.input_nodes().cend());
-      long input_id = std::distance(idx.input_nodes().cbegin(), input_iter);
+      int64_t input_id = std::distance(idx.input_nodes().cbegin(), input_iter);
       if (src.HasAttr("layout_inputs")) {
         new_layouts[new_node.get()] =
           {src.GetAttr<std::vector<Layout> >("layout_inputs")[input_id]};

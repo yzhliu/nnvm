@@ -10,6 +10,7 @@
 #include <dmlc/parameter.h>
 #include <nnvm/tuple.h>
 #include <nnvm/layout.h>
+#include <string>
 
 namespace nnvm {
 namespace top {

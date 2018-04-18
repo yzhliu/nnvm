@@ -11,6 +11,7 @@
 #include <nnvm/graph.h>
 #include <nnvm/symbolic.h>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 namespace nnvm {

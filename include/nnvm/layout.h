@@ -9,13 +9,14 @@
  *        [batch_size, channel, height, width, channel_block].
  *        Here sub-dimension channel_block=16 is the split of super-dimension C (channel).
  */
-#ifndef NNVM_COMPILER_LAYOUT_H_
-#define NNVM_COMPILER_LAYOUT_H_
+#ifndef NNVM_LAYOUT_H_
+#define NNVM_LAYOUT_H_
 
 #include <dmlc/parameter.h>
 #include <string>
 #include <sstream>
 #include <vector>
+#include <utility>
 #include <algorithm>
 
 namespace nnvm {
@@ -67,7 +68,7 @@ class Layout {
    * \return reference of self
    */
   inline Layout& operator=(Layout&& src) {
-    Layout(std::move(src)).swap(*this);
+    Layout(std::move(src)).swap(*this); // NOLINT(*)
     return *this;
   }
   /*!
@@ -134,8 +135,10 @@ class Layout {
    * \return The converted description.
    */
   static inline LayoutDim to_superdim(LayoutDim dim) {
-    if (is_subdim(dim)) return dim - 'a' + 'A';
-    else return dim;
+    if (is_subdim(dim)) {
+      return dim - 'a' + 'A';
+    }
+    return dim;
   }
 
   /*!
@@ -144,8 +147,10 @@ class Layout {
    * \return The converted description.
    */
   static inline LayoutDim to_subdim(LayoutDim c) {
-    if (is_superdim(c)) return c - 'A' + 'a';
-    else return c;
+    if (is_superdim(c)) {
+      return c - 'A' + 'a';
+    }
+    return c;
   }
 
   /*!
@@ -447,4 +452,4 @@ class Layout {
 
 }  // namespace nnvm
 
-#endif  // NNVM_COMPILER_LAYOUT_H_
+#endif  // NNVM_LAYOUT_H_
