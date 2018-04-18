@@ -143,18 +143,22 @@ inline bool BinaryBroadcastInferLayout(const NodeAttrs& attrs,
       NNVM_ASSIGN_LAYOUT(*olayouts, 0, lhs);
       return true;
     }
-    // for example, NCHW <-> CHW, N16nCH16cW <-> HCW16c, etc, are broadcast-convertible
-    // but CNHW <-> CHW, NCHW16n <-> CHW are not.
+    // For example, NCHW <-> CHW, N16nCH16cW <-> HCW16c, etc, are broadcast-convertible
+    // because as the definition, CHW can broadcast with NCHW.
+    // For the second case, we can convert HCW16c to CH16cW then it can broadcast with N16nCH16cW.
+    // But CNHW <-> CHW, NCHW16n <-> CHW are not,
+    // because not matter how we adjust the layout of 'CHW',
+    // we can never have an 'N' between 'C' and "HW".
     size_t l_start = 0, r_start = 0;
     size_t l = 0, r = 0;
     bool find_first_match = false;
     while (l < lhs.ndim() && r < rhs.ndim()) {
       if (!rhs.contains(Layout::to_superdim(lhs[l]))) {
         CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
-        r_start = ++r;
+        l_start = ++l;
       } else if (!lhs.contains(Layout::to_superdim(rhs[r]))) {
         CHECK(!find_first_match) << lhs << " and " << rhs << " are not broadcast-convertible";
-        l_start = ++l;
+        r_start = ++r;
       } else {
         find_first_match = true;
         ++l; ++r;

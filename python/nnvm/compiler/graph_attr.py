@@ -106,6 +106,12 @@ def set_layout_inputs(g, layout):
         list_layout[0] = layout
     else:
         raise ValueError("Input layout must be str or dict")
+    last_inferred_layouts = g.json_attr("layout")
+    if last_inferred_layouts:
+        input_layout = [last_inferred_layouts[g.index.entry_id(x)] for x in g.index.input_names]
+        assert(len(input_layout) == len(list_layout))
+        for i in range(len(input_layout)):
+            list_layout[i] = list_layout[i] if list_layout[i] != '__undef__' else input_layout[i]
     g._set_json_attr("layout_inputs", list_layout, 'list_layout')
     return g
 

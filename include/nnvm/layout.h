@@ -100,6 +100,13 @@ class Layout {
    * @return a new layout
    */
   inline Layout operator+(const Layout& other) const {
+    if (!this->defined() && !other.defined()) {
+      return Layout::Undef();
+    } else if (!this->defined()) {
+      return other;
+    } else if (!other.defined()) {
+      return *this;
+    }
     return Layout(this->name_ + other.name_);
   }
 
@@ -190,12 +197,29 @@ class Layout {
    * \return A newly constructed Layout object.
    */
   inline Layout sublayout(size_t pos, size_t len) const {
+    if (pos > ndim()) return Layout::Undef();
     if (pos + len > ndim()) len = ndim() - pos;
+    if (len == 0) return Layout::Undef();
     std::ostringstream new_layout;
     for (size_t i = pos; i < pos + len; ++i) {
       if (is_subdim(layout_simplified_[i])) {
         auto block_size = this->subsizeof(layout_simplified_[i]);
-        CHECK_LT(block_size, 0);
+        CHECK_GT(block_size, 0);
+        new_layout << block_size;
+      }
+      new_layout << layout_simplified_[i];
+    }
+    return Layout(new_layout.str());
+  }
+
+  /*! \return A newly constructed reversed Layout object. */
+  inline Layout reverse() const {
+    if (!this->defined()) return Layout::Undef();
+    std::ostringstream new_layout;
+    for (int64_t i = this->ndim() - 1; i >= 0; --i) {
+      if (is_subdim(layout_simplified_[i])) {
+        auto block_size = this->subsizeof(layout_simplified_[i]);
+        CHECK_GT(block_size, 0);
         new_layout << block_size;
       }
       new_layout << layout_simplified_[i];
@@ -373,12 +397,12 @@ class Layout {
 
   void parse(const std::string& layout) {
     name_ = layout;
-    if (layout == "__undef__") return;
-
     std::fill_n(superdim_pos_, kUniqueDim, -1);
     std::fill_n(subdim_pos_, kUniqueDim, -1);
     std::fill_n(subdim_size_, kUniqueDim, -1);
     layout_simplified_.clear();
+
+    if (layout == "__undef__") return;
 
     int32_t factor = 0;
     uint32_t curr = 0;

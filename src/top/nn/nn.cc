@@ -210,17 +210,16 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
   CHECK_EQ(last_in_layouts->size(), 5U);
   CHECK_EQ(out_layouts->size(), 3U);
 
-  const Layout& data_layout = in_layouts->at(0);
+  Layout data_layout = in_layouts->at(0);
   const Layout& origin_data_layout = last_in_layouts->at(0);
   Layout param_layout("C");
   if (data_layout.defined()) {
-    bool need_layout_convert = false;
     if (data_layout.indexof('C') != param.axis) {
       CHECK(origin_data_layout.defined())
         << "Channel in data layout " << data_layout
         << " is not at index " << param.axis;
       // convert it to the original one.
-      need_layout_convert = true;
+      data_layout = origin_data_layout;
       NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
     } else if (data_layout.indexof('c') >= 0 &&
                static_cast<uint32_t>(data_layout.indexof('c')) != (data_layout.ndim()-1)) {
@@ -228,7 +227,7 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
         << "sub-channel c in data layout " << data_layout
         << " does not at the final dimension";
       // convert it to the original one.
-      need_layout_convert = true;
+      data_layout = origin_data_layout;
       NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
     } else {
       for (Layout::LayoutDim axis : data_layout) {
@@ -236,15 +235,15 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
           CHECK(origin_data_layout.defined())
             << "sub-axis other than c appears in data layout " << data_layout;
           // convert it to the original one.
-          need_layout_convert = true;
+          data_layout = origin_data_layout;
           NNVM_ASSIGN_LAYOUT(*in_layouts, 0, origin_data_layout);
           break;
         }
       }
     }
-    if (!need_layout_convert
-        && origin_data_layout.defined()
-        && data_layout != origin_data_layout) {
+
+    // decide the param layout
+    if (data_layout.defined()) {
       auto channel_block = data_layout.subsizeof('C');
       if (channel_block > 0) {
         param_layout = ("C" + std::to_string(channel_block) + "c");
@@ -252,12 +251,13 @@ inline bool BatchNormInferLayout(const NodeAttrs& attrs,
     }
   }
 
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 0, data_layout);
   NNVM_ASSIGN_LAYOUT(*in_layouts, 1, param_layout);
   NNVM_ASSIGN_LAYOUT(*in_layouts, 2, param_layout);
   NNVM_ASSIGN_LAYOUT(*in_layouts, 3, param_layout);
   NNVM_ASSIGN_LAYOUT(*in_layouts, 4, param_layout);
 
-  NNVM_ASSIGN_LAYOUT(*out_layouts, 0, in_layouts->at(0));
+  NNVM_ASSIGN_LAYOUT(*out_layouts, 0, data_layout);
   NNVM_ASSIGN_LAYOUT(*out_layouts, 1, param_layout);
   NNVM_ASSIGN_LAYOUT(*out_layouts, 2, param_layout);
   return true;

@@ -29,14 +29,11 @@ using LayoutAttrDict = std::unordered_map<const Node*, std::vector<Layout> >;
 
 /*!
  * \brief A simple layout infer pass that will
- *  insert layout transform nodes automatically.
+ *        insert layout transform nodes automatically.
  */
 nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
   static auto& op_infer_layout =
     nnvm::Op::GetAttr<FInferLayout>("FInferLayout");
-
-  const std::vector<Layout>& input_layouts =
-      src.GetAttr<std::vector<Layout> >("layout_inputs");
 
   const IndexedGraph& idx = src.indexed_graph();
   std::vector<nnvm::NodePtr> mirror_vec(idx.num_nodes(), nullptr);
@@ -54,7 +51,12 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
         idx.input_nodes().cbegin(), idx.input_nodes().cend(), nid);
       CHECK(input_iter != idx.input_nodes().cend());
       long input_id = std::distance(idx.input_nodes().cbegin(), input_iter);
-      new_layouts[new_node.get()] = { input_layouts[input_id] };
+      if (src.HasAttr("layout_inputs")) {
+        new_layouts[new_node.get()] =
+          {src.GetAttr<std::vector<Layout> >("layout_inputs")[input_id]};
+      } else {
+        new_layouts[new_node.get()] = {Layout::Undef()};
+      }
       mirror_vec[nid] = new_node;
       continue;
     }
