@@ -11,6 +11,7 @@
 #include <nnvm/graph.h>
 #include <nnvm/symbolic.h>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 namespace nnvm {
@@ -19,6 +20,7 @@ namespace compiler {
 using tvm::runtime::PackedFunc;
 
 using AttrDict = std::unordered_map<std::string, std::string>;
+using SymbolArray = std::vector<const Symbol*>;
 
 /*!
  * \brief Get PackedFunction from global registry and
@@ -52,6 +54,12 @@ template<>
 struct extension_class_info<nnvm::compiler::AttrDict> {
   static const int code = 18;
 };
+
+template<>
+struct extension_class_info<nnvm::compiler::SymbolArray> {
+  static const int code = 19;
+};
+
 }  // namespace runtime
 }  // namespace tvm
 #endif  // NNVM_COMPILER_PACKED_FUNC_EXT_H_

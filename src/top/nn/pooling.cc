@@ -24,17 +24,27 @@ DMLC_REGISTER_PARAMETER(Pool2DParam);
 inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape>* in_shape,
                              std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
 
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
-  dshape = ConvertLayout(dshape, param.layout, kNCHW);
+
+  CHECK(dshape.ndim() == 4U || dshape.ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
+  Layout layout(param.layout);
+  CHECK(layout.convertible(kNCHW)) << "Invalid layout " << layout;
+  if (dshape.ndim() == 5U) {
+    layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
+  }
+
+  dshape = ConvertLayout(dshape, layout, kNCHW);
 
   TShape oshape = dshape;
-  CHECK_EQ(dshape.ndim(), 4U)
-      << "Pooling: Input data should be 4D";
   CHECK(param.pool_size[0] <= dshape[2] + 2 * param.padding[0])
       << "pool size (" << param.pool_size[0] << ") exceeds input (" << dshape[2]
       << " padded to " << (dshape[2] + 2*param.padding[0]) << ")";
@@ -53,8 +63,40 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
     oshape[3] = ((dshape[3] + 2 * param.padding[1] - param.pool_size[1] +
                   param.strides[1] - 1) / param.strides[1]) + 1;
   }
-  oshape = ConvertLayout(oshape, kNCHW, param.layout);
+  oshape = ConvertLayout(oshape, kNCHW, layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
+  return true;
+}
+
+inline bool Pool2DInferLayout(const NodeAttrs& attrs,
+                              std::vector<Layout> *ilayouts,
+                              const std::vector<Layout> *last_ilayouts,
+                              std::vector<Layout> *olayouts) {
+  const Pool2DParam &param = nnvm::get<Pool2DParam>(attrs.parsed);
+  CHECK_EQ(ilayouts->size(), 1);
+  CHECK_EQ(last_ilayouts->size(), 1);
+  CHECK_EQ(olayouts->size(), 1);
+
+  Layout input = (*ilayouts)[0];
+  const Layout layout(param.layout);
+
+  if (input.defined()) {
+    CHECK(input.convertible(layout)) << "Invalid input layout " << input;
+    for (uint32_t i = 0; i < input.ndim(); ++i) {
+      if (Layout::is_subdim(input[i]) &&
+          (i != input.ndim()-1 || input[i] != 'c')) {
+        // only support split on channel (C) and put it to the last dimension.
+        input = layout;
+        break;
+      }
+    }
+  } else {
+    input = layout;
+  }
+
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, input);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, input);
+
   return true;
 }
 
@@ -82,20 +124,29 @@ NNVM_REGISTER_OP(max_pool2d)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", Pool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMCompute>(
-  "FTVMCompute", [](const NodeAttrs& attrs,
-                    const Array<Tensor>& inputs,
-                    const Array<Tensor>& out_info) {
-    const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
-    auto pool_size = ShapeToArray(param.pool_size);
-    auto strides = ShapeToArray(param.strides);
-    auto padding = ShapeToArray(param.padding);
-    auto ceil_mode = param.ceil_mode;
-    CHECK(param.layout == kNCHW || param.layout == kNHWC) << "Unsupported layout";
-    std::string layout = (param.layout == kNCHW ? "NCHW" : "NHWC");
-    return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, \
-                     topi::nn::kMaxPool, ceil_mode, layout) };
+.set_attr<FInferLayout>("FInferLayout", Pool2DInferLayout)
+.set_attr<FTVMCompute>("FTVMCompute", [](const NodeAttrs& attrs,
+                                         const Array<Tensor>& inputs,
+                                         const Array<Tensor>& out_info) {
+  const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
+  auto pool_size = ShapeToArray(param.pool_size);
+  auto strides = ShapeToArray(param.strides);
+  auto padding = ShapeToArray(param.padding);
+  auto ceil_mode = param.ceil_mode;
+
+  Layout layout(param.layout);
+  CHECK(layout.convertible(Layout("NCHW")))
+    << "max_pool2d currently only supports layouts that are convertible from NCHW";
+  CHECK_EQ(layout.indexof('h'), -1) << "max_pool2d does not support input split on height";
+  CHECK_EQ(layout.indexof('w'), -1) << "max_pool2d does not support input split on width";
+
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
+  return Array<Tensor>{
+    topi::nn::pool(inputs[0], pool_size, strides, padding,
+                   topi::nn::kMaxPool, ceil_mode, layout.name())};
 })
 .set_attr<FGradient>(
   "FGradient", [](const NodePtr& n,
@@ -144,20 +195,29 @@ NNVM_REGISTER_OP(avg_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<Pool2DParam>)
 .set_attr<FInferShape>("FInferShape", Pool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FTVMCompute>(
-  "FTVMCompute", [](const NodeAttrs& attrs,
-                    const Array<Tensor>& inputs,
-                    const Array<Tensor>& out_info) {
-    const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
-    auto pool_size = ShapeToArray(param.pool_size);
-    auto strides = ShapeToArray(param.strides);
-    auto padding = ShapeToArray(param.padding);
-    auto ceil_mode = param.ceil_mode;
-    CHECK(param.layout == kNCHW || param.layout == kNHWC) << "Unsupported layout";
-    std::string layout = (param.layout == kNCHW ? "NCHW" : "NHWC");
-    return Array<Tensor>{
-      topi::nn::pool(inputs[0], pool_size, strides, padding, \
-                     topi::nn::kAvgPool, ceil_mode, layout) };
+.set_attr<FInferLayout>("FInferLayout", Pool2DInferLayout)
+.set_attr<FTVMCompute>("FTVMCompute", [](const NodeAttrs& attrs,
+                                         const Array<Tensor>& inputs,
+                                         const Array<Tensor>& out_info) {
+  const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
+  auto pool_size = ShapeToArray(param.pool_size);
+  auto strides = ShapeToArray(param.strides);
+  auto padding = ShapeToArray(param.padding);
+  auto ceil_mode = param.ceil_mode;
+
+  Layout layout(param.layout);
+  CHECK(layout.convertible(Layout("NCHW")))
+    << "avg_pool2d currently only supports layouts that are convertible from NCHW";
+  CHECK_EQ(layout.indexof('h'), -1) << "avg_pool2d does not support input split on height";
+  CHECK_EQ(layout.indexof('w'), -1) << "avg_pool2d does not support input split on width";
+
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
+  return Array<Tensor>{
+    topi::nn::pool(inputs[0], pool_size, strides, padding,
+                   topi::nn::kAvgPool, ceil_mode, layout.name())};
 })
 .set_num_outputs(1)
 .set_num_inputs(1)
@@ -169,16 +229,61 @@ DMLC_REGISTER_PARAMETER(GlobalPool2DParam);
 inline bool GlobalPool2DInferShape(const nnvm::NodeAttrs& attrs,
                                    std::vector<TShape>* in_shape,
                                    std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
+
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
-  dshape = ConvertLayout(dshape, param.layout, kNCHW);
+
+  CHECK(dshape.ndim() == 4U || dshape.ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
+  Layout layout(param.layout);
+  CHECK(layout.convertible(kNCHW)) << "Invalid layout " << layout;
+  if (dshape.ndim() == 5U) {
+    layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
+  }
+
+  dshape = ConvertLayout(dshape, layout, kNCHW);
   TShape oshape = dshape;
   oshape[2] = oshape[3] = 1;
-  oshape = ConvertLayout(oshape, kNCHW, param.layout);
+  oshape = ConvertLayout(oshape, kNCHW, layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
+  return true;
+}
+
+inline bool GlobalPool2DInferLayout(const NodeAttrs& attrs,
+                                    std::vector<Layout> *ilayouts,
+                                    const std::vector<Layout> *last_ilayouts,
+                                    std::vector<Layout> *olayouts) {
+  const GlobalPool2DParam &param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
+  CHECK_EQ(ilayouts->size(), 1);
+  CHECK_EQ(last_ilayouts->size(), 1);
+  CHECK_EQ(olayouts->size(), 1);
+
+  Layout input = (*ilayouts)[0];
+  const Layout layout(param.layout);
+
+  if (input.defined()) {
+    CHECK(input.convertible(layout)) << "Invalid input layout " << input;
+    for (uint32_t i = 0; i < input.ndim(); ++i) {
+      if (Layout::is_subdim(input[i]) &&
+          (i != input.ndim()-1 || input[i] != 'c')) {
+        // only support split on channel (C) and put it to the last dimension.
+        input = layout;
+        break;
+      }
+    }
+  } else {
+    input = layout;
+  }
+
+  NNVM_ASSIGN_LAYOUT(*ilayouts, 0, input);
+  NNVM_ASSIGN_LAYOUT(*olayouts, 0, input);
+
   return true;
 }
 
@@ -197,15 +302,26 @@ NNVM_REGISTER_OP(global_max_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<GlobalPool2DParam>)
 .set_attr<FInferShape>("FInferShape", GlobalPool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", GlobalPool2DInferLayout)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
                     const Array<Tensor>& out_info) {
-    const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
-    CHECK_EQ(param.layout, kNCHW)
-      << "global_max_pool2d currently only supports NCHW layout";
-    return Array<Tensor>{
-      topi::nn::global_pool(inputs[0], topi::nn::kMaxPool) };
+  const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
+  Layout layout(param.layout);
+  CHECK(layout.convertible(Layout("NCHW")))
+    << "global_max_pool2d currently only supports layouts that are convertible from NCHW";
+  CHECK_EQ(layout.indexof('h'), -1)
+    << "global_max_pool2d does not support input split on height";
+  CHECK_EQ(layout.indexof('w'), -1)
+    << "global_max_pool2d does not support input split on width";
+
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
+  return Array<Tensor>{
+    topi::nn::global_pool(inputs[0], topi::nn::kMaxPool, layout.name()) };
 })
 .set_num_outputs(1)
 .set_num_inputs(1)
@@ -227,15 +343,26 @@ NNVM_REGISTER_OP(global_avg_pool2d)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<GlobalPool2DParam>)
 .set_attr<FInferShape>("FInferShape", GlobalPool2DInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", GlobalPool2DInferLayout)
 .set_attr<FTVMCompute>(
   "FTVMCompute", [](const NodeAttrs& attrs,
                     const Array<Tensor>& inputs,
                     const Array<Tensor>& out_info) {
-    const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
-    CHECK_EQ(param.layout, kNCHW)
-      << "global_avg_pool2d currently only supports NCHW layout";
-    return Array<Tensor>{
-      topi::nn::global_pool(inputs[0], topi::nn::kAvgPool) };
+  const GlobalPool2DParam& param = nnvm::get<GlobalPool2DParam>(attrs.parsed);
+  Layout layout(param.layout);
+  CHECK(layout.convertible(Layout("NCHW")))
+    << "global_avg_pool2d currently only supports layouts that are convertible from NCHW";
+  CHECK_EQ(layout.indexof('h'), -1)
+    << "global_avg_pool2d does not support input split on height";
+  CHECK_EQ(layout.indexof('w'), -1)
+    << "global_avg_pool2d does not support input split on width";
+
+  CHECK(inputs[0].ndim() == 4U || inputs[0].ndim() == 5U)
+    << "Pool2D only support 4-D input (e.g., NCHW)"
+    << " or 5-D input (last dimension is a split of channel)";
+
+  return Array<Tensor>{
+    topi::nn::global_pool(inputs[0], topi::nn::kAvgPool, layout.name()) };
 })
 .set_num_outputs(1)
 .set_num_inputs(1)

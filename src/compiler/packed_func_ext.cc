@@ -8,6 +8,7 @@
 #include <nnvm/op.h>
 #include <nnvm/compiler/packed_func_ext.h>
 #include <nnvm/compiler/op_attr_types.h>
+#include <tvm/runtime/c_runtime_api.h>
 #include "./node_attr.h"
 #include "compile_engine.h"
 
@@ -17,6 +18,7 @@ namespace runtime {
 TVM_REGISTER_EXT_TYPE(nnvm::Graph);
 TVM_REGISTER_EXT_TYPE(nnvm::Symbol);
 TVM_REGISTER_EXT_TYPE(nnvm::compiler::AttrDict);
+TVM_REGISTER_EXT_TYPE(nnvm::compiler::SymbolArray);
 
 }  // namespace runtime
 }  // namespace tvm
@@ -62,6 +64,40 @@ TVM_REGISTER_GLOBAL("nnvm.compiler._dict_keys")
     *rv = keys;
   });
 
+TVM_REGISTER_GLOBAL("nnvm.compiler._symbol_array_get")
+.set_body([](TVMArgs args, TVMRetValue *rv) {
+    const SymbolArray& arr = args[0].AsExtension<SymbolArray>();
+    int i = args[1];
+    if (i >= arr.size()) {
+      *rv = nullptr;
+    } else {
+      *rv = *(arr[i]);
+    }
+  });
+
+TVM_REGISTER_GLOBAL("nnvm.compiler._symbol_array_size")
+.set_body([](TVMArgs args, TVMRetValue *rv) {
+    const SymbolArray& arr = args[0].AsExtension<SymbolArray>();
+    *rv = static_cast<int64_t>(arr.size());
+  });
+
+TVM_REGISTER_GLOBAL("nnvm.compiler._register_alter_op_layout")
+.set_body([](TVMArgs args, TVMRetValue *rv) {
+  // Intentionally copy and not de-allocate it, to avoid free pyobject during shutdown
+  PackedFunc* f = new PackedFunc(args[1].operator PackedFunc());
+  Op& op = ::dmlc::Registry<nnvm::Op>::Get()->__REGISTER_OR_GET__(args[0]);
+  auto fpack = [f](const NodeAttrs& attrs,
+                   const SymbolArray& inputs,
+                   const Array<Tensor>& tinfos) {
+    TVMRetValue ret = (*f)(GetAttrDict(attrs), inputs, tinfos);
+    CHECK_EQ(ret.type_code(), tvm::runtime::extension_class_info<Symbol>::code)
+      << " expected " << "Symbol (code = " << tvm::runtime::extension_class_info<Symbol>::code
+      << ") but get code = " << ret.type_code();
+    return *(static_cast<Symbol*>(ret.value().v_handle));
+  };
+  op.set_attr<FTVMAlterOpLayout>("FTVMAlterOpLayout", fpack, args[2]);
+});
+
 // custom version of TVM compute
 TVM_REGISTER_GLOBAL("nnvm._register_compute")
 .set_body([](TVMArgs args, TVMRetValue *rv) {
@@ -84,7 +120,7 @@ TVM_REGISTER_GLOBAL("nnvm._register_compute")
 
 TVM_REGISTER_GLOBAL("nnvm._register_schedule")
 .set_body([](TVMArgs args, TVMRetValue *rv) {
-        // Intentionally copy and not de-allocate it, to avoid free pyobject during shutdown
+    // Intentionally copy and not de-allocate it, to avoid free pyobject during shutdown
     PackedFunc* f = new PackedFunc(args[1].operator PackedFunc());
     Op& op = ::dmlc::Registry<nnvm::Op>::Get()->__REGISTER_OR_GET__(args[0]);
     auto fschedule = [f](const NodeAttrs& attrs,

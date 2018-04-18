@@ -19,6 +19,7 @@ DMLC_REGISTER_PARAMETER(UpSamplingParam);
 inline bool UpSamplingInferShape(const nnvm::NodeAttrs& attrs,
                                    std::vector<TShape>* in_shape,
                                    std::vector<TShape>* out_shape) {
+  static const Layout kNCHW("NCHW");
   const UpSamplingParam& param = nnvm::get<UpSamplingParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
@@ -30,6 +31,18 @@ inline bool UpSamplingInferShape(const nnvm::NodeAttrs& attrs,
   oshape[3] = oshape[3] * param.scale;
   oshape = ConvertLayout(oshape, kNCHW, param.layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
+  return true;
+}
+
+inline bool UpsamplingLayout(const NodeAttrs& attrs,
+                             std::vector<Layout> *in_layouts,
+                             const std::vector<Layout> *last_in_layouts,
+                             std::vector<Layout> *out_layouts) {
+  CHECK_EQ(in_layouts->size(), 1U);
+  CHECK_EQ(out_layouts->size(), 1U);
+  // only support NCHW for now.
+  in_layouts->at(0) = "NCHW";
+  out_layouts->at(0) = "NCHW";
   return true;
 }
 
@@ -46,6 +59,7 @@ NNVM_REGISTER_OP(upsampling)
 .set_attr<FGetAttrDict>("FGetAttrDict", ParamGetAttrDict<UpSamplingParam>)
 .set_attr<FInferShape>("FInferShape", UpSamplingInferShape)
 .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FInferLayout>("FInferLayout", UpsamplingLayout)
 .set_num_outputs(1)
 .set_num_inputs(1)
 .set_support_level(2);
