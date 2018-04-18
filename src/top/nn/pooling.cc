@@ -24,7 +24,6 @@ DMLC_REGISTER_PARAMETER(Pool2DParam);
 inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape>* in_shape,
                              std::vector<TShape>* out_shape) {
-  static const Layout kNCHW("NCHW");
   const Pool2DParam& param = nnvm::get<Pool2DParam>(attrs.parsed);
   CHECK_EQ(in_shape->size(), 1U);
   CHECK_EQ(out_shape->size(), 1U);
@@ -32,38 +31,37 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
 
-  CHECK(dshape.ndim() == 4U || dshape.ndim() == 5U)
-    << "Pool2D only support 4-D input (e.g., NCHW)"
-    << " or 5-D input (last dimension is a split of channel)";
+  CHECK_GE(dshape.ndim(), 2U)
+    << "Pool2D only support input >= 2-D: input must have height and width";
 
   Layout layout(param.layout);
-  CHECK(layout.convertible(kNCHW)) << "Invalid layout " << layout;
-  if (dshape.ndim() == 5U) {
-    layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
-  }
+  CHECK(layout.contains('H') && layout.contains('W') &&
+        !layout.contains('h') && !layout.contains('w'))
+    << "Invalid layout " << layout
+    << ". Pool2D layout must have H and W, which cannot be split";
 
-  dshape = ConvertLayout(dshape, layout, kNCHW);
+  const auto hidx = layout.indexof('H');
+  const auto widx = layout.indexof('W');
 
   TShape oshape = dshape;
-  CHECK(param.pool_size[0] <= dshape[2] + 2 * param.padding[0])
-      << "pool size (" << param.pool_size[0] << ") exceeds input (" << dshape[2]
-      << " padded to " << (dshape[2] + 2*param.padding[0]) << ")";
-  CHECK(param.pool_size[1] <= dshape[3] + 2 * param.padding[1])
-      << "pool size (" << param.pool_size[1] << ") exceeds input (" << dshape[3]
-      << " padded to " << (dshape[3] + 2*param.padding[1]) << ")";
+  CHECK(param.pool_size[0] <= dshape[hidx] + 2 * param.padding[0])
+      << "pool size (" << param.pool_size[0] << ") exceeds input (" << dshape[hidx]
+      << " padded to " << (dshape[hidx] + 2*param.padding[0]) << ")";
+  CHECK(param.pool_size[1] <= dshape[widx] + 2 * param.padding[1])
+      << "pool size (" << param.pool_size[1] << ") exceeds input (" << dshape[widx]
+      << " padded to " << (dshape[widx] + 2*param.padding[1]) << ")";
 
   if (!param.ceil_mode) {
-    oshape[2] = ((dshape[2] + 2 * param.padding[0] - param.pool_size[0]) /
-                 param.strides[0]) + 1;
-    oshape[3] = ((dshape[3] + 2 * param.padding[1] - param.pool_size[1]) /
-                 param.strides[1]) + 1;
+    oshape[hidx] = ((dshape[hidx] + 2 * param.padding[0] - param.pool_size[0]) /
+                    param.strides[0]) + 1;
+    oshape[widx] = ((dshape[widx] + 2 * param.padding[1] - param.pool_size[1]) /
+                    param.strides[1]) + 1;
   } else {
-    oshape[2] = ((dshape[2] + 2 * param.padding[0] - param.pool_size[0] +
-                  param.strides[0] - 1) / param.strides[0]) + 1;
-    oshape[3] = ((dshape[3] + 2 * param.padding[1] - param.pool_size[1] +
-                  param.strides[1] - 1) / param.strides[1]) + 1;
+    oshape[hidx] = ((dshape[hidx] + 2 * param.padding[0] - param.pool_size[0] +
+                    param.strides[0] - 1) / param.strides[0]) + 1;
+    oshape[widx] = ((dshape[3] + 2 * param.padding[1] - param.pool_size[1] +
+                    param.strides[1] - 1) / param.strides[1]) + 1;
   }
-  oshape = ConvertLayout(oshape, kNCHW, layout);
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
   return true;
 }
@@ -82,13 +80,12 @@ inline bool Pool2DInferLayout(const NodeAttrs& attrs,
 
   if (input.defined()) {
     CHECK(input.convertible(layout)) << "Invalid input layout " << input;
-    for (uint32_t i = 0; i < input.ndim(); ++i) {
-      if (Layout::is_subdim(input[i]) &&
-          (i != input.ndim()-1 || input[i] != 'c')) {
-        // only support split on channel (C) and put it to the last dimension.
-        input = layout;
-        break;
-      }
+    if (input.indexof('W') != layout.indexof('W') ||
+        input.indexof('H') != layout.indexof('H') ||
+        input.contains('w') || input.contains('h')) {
+      // as long as the index doesn't change for width and height
+      // pool2d can keep the input layout.
+      input = layout;
     }
   } else {
     input = layout;
@@ -237,20 +234,20 @@ inline bool GlobalPool2DInferShape(const nnvm::NodeAttrs& attrs,
   TShape dshape = (*in_shape)[0];
   if (dshape.ndim() ==  0) return false;
 
-  CHECK(dshape.ndim() == 4U || dshape.ndim() == 5U)
-    << "Pool2D only support 4-D input (e.g., NCHW)"
-    << " or 5-D input (last dimension is a split of channel)";
+  CHECK_GE(dshape.ndim(), 2U)
+    << "Pool2D only support input >= 2-D: input must have height and width";
 
   Layout layout(param.layout);
-  CHECK(layout.convertible(kNCHW)) << "Invalid layout " << layout;
-  if (dshape.ndim() == 5U) {
-    layout = layout.split('C', 4, static_cast<uint32_t>(dshape[4]));
-  }
+  CHECK(layout.contains('H') && layout.contains('W') &&
+        !layout.contains('h') && !layout.contains('w'))
+    << "Invalid layout " << layout
+    << ". Pool2D layout must have H and W, which cannot be split";
 
-  dshape = ConvertLayout(dshape, layout, kNCHW);
+  const auto hidx = layout.indexof('H');
+  const auto widx = layout.indexof('W');
+
   TShape oshape = dshape;
-  oshape[2] = oshape[3] = 1;
-  oshape = ConvertLayout(oshape, kNCHW, layout);
+  oshape[hidx] = oshape[widx] = 1;
   NNVM_ASSIGN_OUTPUT_SHAPE(attrs, *out_shape, 0, oshape);
   return true;
 }
@@ -269,13 +266,12 @@ inline bool GlobalPool2DInferLayout(const NodeAttrs& attrs,
 
   if (input.defined()) {
     CHECK(input.convertible(layout)) << "Invalid input layout " << input;
-    for (uint32_t i = 0; i < input.ndim(); ++i) {
-      if (Layout::is_subdim(input[i]) &&
-          (i != input.ndim()-1 || input[i] != 'c')) {
-        // only support split on channel (C) and put it to the last dimension.
-        input = layout;
-        break;
-      }
+    if (input.indexof('W') != layout.indexof('W') ||
+        input.indexof('H') != layout.indexof('H') ||
+        input.contains('w') || input.contains('h')) {
+      // as long as the index doesn't change for width and height
+      // pool2d can keep the input layout.
+      input = layout;
     }
   } else {
     input = layout;
