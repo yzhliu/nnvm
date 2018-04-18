@@ -217,7 +217,7 @@ def _contrib_MultiBoxDetection(inputs, attrs):
                  'nms_threshold': float(nms_threshold),
                  'force_suppress': force_suppress,
                  'variances': variances, 'nms_topk': int(nms_topk)}
-    return _get_nnvm_op('multibox_detection')(inputs[0],inputs[1],
+    return _get_nnvm_op('multibox_detection')(inputs[0], inputs[1],
                                               inputs[2], **new_attrs)
 
 

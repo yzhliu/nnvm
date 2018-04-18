@@ -120,4 +120,3 @@ def register_alter_op_layout(op_name, f=None, level=10):
         _register_alter_op_layout(op_name, myf, level)
         return myf
     return register(f) if f else register
-
