@@ -214,13 +214,14 @@ def test_max_pool2d():
     g, ldict = infer_correct_layout(y)
     assert(ldict["data"][0] == "NCHW")
     assert(ldict["pool"][0] == "NCHW")
-    # pool2d can support split on C and put it to the last dim.
+    # if index of H and W remain the same,
+    # pool2d does not convert the layout.
     g, ldict = infer_correct_layout(g, "NCHW16c")
     assert(ldict["data"][0] == "NCHW16c")
     assert(ldict["pool"][0] == "NCHW16c")
     # for other layout it requires a layout transform.
-    g, ldict = infer_correct_layout(g, "N16cHWC")
-    assert(ldict["data"][0] == "N16cHWC")
+    g, ldict = infer_correct_layout(g, "NHWC")
+    assert(ldict["data"][0] == "NHWC")
     assert(ldict["data_NCHW"][0] == "NCHW")
     assert(ldict["pool"][0] == "NCHW")
 
@@ -231,13 +232,14 @@ def test_global_pool2d():
     g, ldict = infer_correct_layout(y)
     assert(ldict["data"][0] == "NCHW")
     assert(ldict["pool"][0] == "NCHW")
-    # pool2d can support split on C and put it to the last dim.
+    # if index of H and W remain the same,
+    # pool2d does not convert the layout.
     g, ldict = infer_correct_layout(g, "NCHW16c")
     assert(ldict["data"][0] == "NCHW16c")
     assert(ldict["pool"][0] == "NCHW16c")
     # for other layout it requires a layout transform.
-    g, ldict = infer_correct_layout(g, "N16cHWC")
-    assert(ldict["data"][0] == "N16cHWC")
+    g, ldict = infer_correct_layout(g, "NHWC")
+    assert(ldict["data"][0] == "NHWC")
     assert(ldict["data_NCHW"][0] == "NCHW")
     assert(ldict["pool"][0] == "NCHW")
 
