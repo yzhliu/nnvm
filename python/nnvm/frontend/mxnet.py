@@ -247,6 +247,7 @@ _convert_map = {
     'min_axis'      : _rename('min'),
     'reshape'       : _reshape,
     'sum_axis'      : _rename('sum'),
+    'UpSampling'    : _upsampling,
 }
 
 def _convert_symbol(op_name, inputs, attrs,
