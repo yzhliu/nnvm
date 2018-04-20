@@ -218,7 +218,7 @@ def build(graph, target=None, shape=None, dtype="float32",
         By default, llvm is used if it is enabled,
         otherwise a stackvm intepreter is used.
 
-    layout : dict of str to str or str
+    layout : dict of str to str or str optional
         The input layout
 
     Returns
@@ -245,7 +245,7 @@ def build(graph, target=None, shape=None, dtype="float32",
     graph = graph if isinstance(graph, _graph.Graph) else _graph.create(graph)
     shape, dtype = _update_shape_dtype(shape, dtype, params)
 
-    # fix layout if necessary
+    # correct layout if necessary
     layout = layout if layout else {}
     graph = graph_attr.set_layout_inputs(graph, layout)
     graph = graph.apply("InferCorrectLayout")
