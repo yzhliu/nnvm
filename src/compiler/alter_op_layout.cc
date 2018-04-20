@@ -85,15 +85,15 @@ Graph AlterOpLayout(const Graph& src) {
     }
 
     // construct parameters for registered function
-    std::vector<const Symbol*> op_inputs;
+    std::vector<Symbol> op_inputs;
     tvm::Array<tvm::Tensor> tensor_infos;
     CHECK_EQ(n->num_inputs(), idx_graph[nid].inputs.size());
     for (uint32_t i = 0; i < n->num_inputs(); ++i) {
       const nnvm::NodeEntry& input = n->inputs[i];
       // input operator
-      Symbol* op_input = new Symbol();
-      op_input->outputs.push_back(input);
-      op_inputs.push_back(static_cast<const Symbol*>(op_input));
+      Symbol op_input;
+      op_input.outputs.push_back(input);
+      op_inputs.push_back(op_input);
 
       // input tinfo, extract from the original graph
       // because it was where infer_shape & infer_type applied.
@@ -103,9 +103,7 @@ Graph AlterOpLayout(const Graph& src) {
       tensor_infos.push_back(op_output_tinfos[input.index]);
     }
     // callback registered function to get a new operator.
-    auto op = fn_alter_op_layout(n->attrs, op_inputs, tensor_infos);
-    std::for_each(op_inputs.begin(), op_inputs.end(),
-                  [](const Symbol* s){ delete s; });
+    auto op = fn_alter_op_layout(n->attrs, Symbol::CreateGroup(op_inputs), tensor_infos);
     *ret = op.outputs;
     return true;
   };

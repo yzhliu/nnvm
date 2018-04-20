@@ -83,7 +83,7 @@ using FTVMSchedule = std::function<
  */
 using FTVMAlterOpLayout = std::function<
   Symbol(const NodeAttrs& attrs,
-         const SymbolArray& inputs,
+         const Symbol& inputs,
          const Array<Tensor>& tinfos)>;
 
 /*!
