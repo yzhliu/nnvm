@@ -87,6 +87,9 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
     TShape bias_shape({param.channels});
     auto oc_block = out_layout.subsizeof('C');
     if (oc_block > 0) {
+      size_t split_axis = (out_layout.indexof('C') < out_layout.indexof('c')) ? 1 : 0;
+      Layout bias_layout("C");
+      bias_layout = bias_layout.split('C', split_axis, oc_block);
       bias_shape = ConvertLayout(bias_shape, default_bias_layout,
                                  Layout("C" + std::to_string(oc_block) + "c"));
     }
@@ -201,7 +204,7 @@ a bias vector is created and added to the outputs.
                         n->attrs.dict);
 });
 
-NNVM_REGISTER_OP(_contrib_conv2d_nChwc)
+NNVM_REGISTER_OP(_contrib_conv2d_NCHWc)
 .describe(R"code(2D convolution layer (e.g. spatial convolution over images).
 )code" NNVM_ADD_FILELINE)
 .add_argument("data", "5D Tensor", "Packed input data.")

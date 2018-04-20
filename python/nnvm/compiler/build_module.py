@@ -218,7 +218,7 @@ def build(graph, target=None, shape=None, dtype="float32",
         By default, llvm is used if it is enabled,
         otherwise a stackvm intepreter is used.
 
-    layout : dict of str to str or str
+    layout : dict of str to str or str optional
         The input layout
 
     Returns
