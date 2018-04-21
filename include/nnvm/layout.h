@@ -239,7 +239,7 @@ class Layout {
    * \param size size of the sub-dimension.
    * \return A newly constructed Layout object.
    */
-  inline Layout split(LayoutDim dim, size_t target_pos, uint32_t size) {
+  inline Layout split(LayoutDim dim, size_t target_pos, uint32_t size) const {
     CHECK(target_pos <= this->ndim()) << "Invalid split position "
                                       << target_pos << " for layout " << name_;
     CHECK(is_superdim(dim)) << "Cannot split a sub-dimension " << dim;
