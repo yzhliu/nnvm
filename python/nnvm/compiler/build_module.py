@@ -162,13 +162,13 @@ def optimize(graph, shape, dtype="float32", layout=None):
     if cfg.pass_enabled("AlterOpLayout"):
         layout = layout if layout else {}
         graph = graph_attr.set_layout_inputs(graph, layout)
-        graph = graph.apply(["InferCorrectLayout"])
+        graph = graph.apply(["CorrectLayout"])
 
         graph = graph_attr.set_shape_inputs(graph, shape)
         graph = graph_attr.set_dtype_inputs(graph, dtype)
         graph = graph.apply(["InferShape", "InferType", "AlterOpLayout"])
         graph = graph_attr.set_layout_inputs(graph, layout)
-        graph = graph.apply(["InferCorrectLayout"])
+        graph = graph.apply(["CorrectLayout"])
 
     if cfg.pass_enabled("SimplifyInference"):
         graph = graph_attr.set_shape_inputs(graph, shape)
@@ -248,7 +248,7 @@ def build(graph, target=None, shape=None, dtype="float32",
     # correct layout if necessary
     layout = layout if layout else {}
     graph = graph_attr.set_layout_inputs(graph, layout)
-    graph = graph.apply("InferCorrectLayout")
+    graph = graph.apply("CorrectLayout")
     index = graph.index
     layouts = graph.json_attr("layout")
     layout = {x : layouts[index.entry_id(x)] for x in index.input_names}

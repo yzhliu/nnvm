@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2018 by Contributors
- * \file infer_correct_layout.cc
- * \brief Infer and correct (if necessary) layout.
+ * \file correct_layout.cc
+ * \brief Infer and correct layout.
  */
 #include <nnvm/graph.h>
 #include <nnvm/op_attr_types.h>
@@ -31,7 +31,7 @@ using LayoutAttrDict = std::unordered_map<const Node*, std::vector<Layout> >;
  * \brief A simple layout infer pass that will
  *        insert layout transform nodes automatically.
  */
-nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
+nnvm::Graph CorrectLayout(nnvm::Graph src) {
   static auto& op_infer_layout =
     nnvm::Op::GetAttr<FInferLayout>("FInferLayout");
 
@@ -159,9 +159,9 @@ nnvm::Graph InferCorrectLayout(nnvm::Graph src) {
 }
 
 // register pass
-NNVM_REGISTER_PASS(InferCorrectLayout)
+NNVM_REGISTER_PASS(CorrectLayout)
 .describe("Return a layout-transformed graph of src.")
-.set_body(InferCorrectLayout)
+.set_body(CorrectLayout)
 .provide_graph_attr("layout")
 .set_change_graph(true);
 
