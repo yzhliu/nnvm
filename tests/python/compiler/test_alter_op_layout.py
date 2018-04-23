@@ -23,7 +23,7 @@ def test_alter_conv2d_layout():
     flatten = sym.flatten(relu, name="flatten")
     softmax = sym.softmax(flatten, name="softmax")
     g = graph.create(softmax)
-    g = g.apply("InferCorrectLayout")
+    g = g.apply("CorrectLayout")
     g = graph_attr.set_dtype_inputs(g, "float32")
     g = g.apply(["InferShape", "InferType"])
     layouts_origin = get_layouts(g)
