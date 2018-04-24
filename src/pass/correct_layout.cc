@@ -112,8 +112,6 @@ nnvm::Graph CorrectLayout(nnvm::Graph src) {
       const Layout& produce = produce_ilayouts[i];
       const Layout& request = request_ilayouts[i];
       if (produce != request && produce.defined()) {
-        LOG(INFO) << "Insert layout transformer for " << i << "-th input of "
-                  << inode.source->op()->name << ". From " << produce << " to " << request;
         nnvm::NodePtr tnode = CreateLayoutTransformNode(produce, request);
         tnode->attrs.name = idx[e.node_id].source->attrs.name + "_" + request.name();
         tnode->inputs.emplace_back(new_node->inputs[i]);
