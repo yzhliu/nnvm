@@ -146,11 +146,11 @@ class Layout {
    * \param dim input dimension
    * \return The converted description.
    */
-  static inline LayoutDim to_subdim(LayoutDim c) {
-    if (is_superdim(c)) {
-      return c - 'A' + 'a';
+  static inline LayoutDim to_subdim(LayoutDim dim) {
+    if (is_superdim(dim)) {
+      return dim - 'A' + 'a';
     }
-    return c;
+    return dim;
   }
 
   /*!
