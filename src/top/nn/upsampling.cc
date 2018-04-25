@@ -38,11 +38,12 @@ inline bool UpsamplingLayout(const NodeAttrs& attrs,
                              std::vector<Layout> *in_layouts,
                              const std::vector<Layout> *last_in_layouts,
                              std::vector<Layout> *out_layouts) {
+  const UpSamplingParam& param = nnvm::get<UpSamplingParam>(attrs.parsed);
   CHECK_EQ(in_layouts->size(), 1U);
   CHECK_EQ(out_layouts->size(), 1U);
-  // only support NCHW for now.
-  in_layouts->at(0) = "NCHW";
-  out_layouts->at(0) = "NCHW";
+  const Layout layout(param.layout);
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 0, layout);
+  NNVM_ASSIGN_LAYOUT(*out_layouts, 0, layout);
   return true;
 }
 

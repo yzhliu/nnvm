@@ -260,6 +260,14 @@ inline bool ZeroShape(const NodeAttrs& attrs,
   }
 }
 
+// do not infer layout
+inline bool ZeroLayout(const NodeAttrs& attrs,
+                       std::vector<Layout> *in_layouts,
+                       const std::vector<Layout> *last_in_layouts,
+                       std::vector<Layout> *out_layouts) {
+  return true;
+}
+
 // simply assign output shape or type from input
 template<typename AttrType, int in_index, int out_index>
 inline bool AssignOutputAttr(const NodeAttrs& attrs,
