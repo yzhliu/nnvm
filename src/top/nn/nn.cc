@@ -512,6 +512,30 @@ inline bool PReluInferShape(const nnvm::NodeAttrs &attrs,
   return true;
 }
 
+inline bool PReluInferLayout(const NodeAttrs& attrs,
+                             std::vector<Layout> *in_layouts,
+                             const std::vector<Layout> *last_in_layouts,
+                             std::vector<Layout> *out_layouts) {
+  const PReLUParam& param = nnvm::get<PReLUParam>(attrs.parsed);
+  CHECK_EQ(in_layouts->size(), 2U);
+  CHECK_EQ(last_in_layouts->size(), 2U);
+  CHECK_EQ(out_layouts->size(), 1U);
+
+  const Layout& data_layout = last_in_layouts->at(0).defined() ?
+                              last_in_layouts->at(0) : in_layouts->at(0);
+  if (data_layout.defined()) {
+    CHECK(data_layout.indexof('C') == param.axis && !data_layout.contains('c'))
+      << "Channel in data layout " << data_layout
+      << " is not at index " << param.axis;
+  }
+
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 0, data_layout);
+  NNVM_ASSIGN_LAYOUT(*in_layouts, 1, Layout("C"));
+  NNVM_ASSIGN_LAYOUT(*out_layouts, 0, data_layout);
+
+  return true;
+}
+
 NNVM_REGISTER_OP(prelu)
 .describe(R"code(Parametric version of a Rectified Linear Unit.
 It accepts two arguments: an input ``x`` and a channelwise slope ``alpha``
@@ -526,6 +550,7 @@ where :math:`*` is an channelwise multiplication for each sample in the
 .set_num_inputs(2)
 .set_num_outputs(1)
 .set_attr<FInferShape>("FInferShape", PReluInferShape)
+.set_attr<FInferLayout>("FInferLayout", PReluInferLayout)
 .set_attr<FListInputNames>("FListInputNames", [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"data", "alpha"};
   })
