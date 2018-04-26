@@ -121,7 +121,7 @@ inline bool ConcatenateInferShape(const NodeAttrs& attrs,
   return dshape.Size() != 0;
 }
 
-inline bool ConcatenateCorrectLayout(const NodeAttrs &attrs,
+inline bool ConcatenateCorrectLayout(const NodeAttrs& attrs,
                                      std::vector<Layout> *ilayouts,
                                      const std::vector<Layout> *last_ilayouts,
                                      std::vector<Layout> *olayouts) {
@@ -737,7 +737,7 @@ inline bool TransposeShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool TransposeCorrectLayout(const NodeAttrs &attrs,
+inline bool TransposeCorrectLayout(const NodeAttrs& attrs,
                                    std::vector<Layout> *ilayouts,
                                    const std::vector<Layout> *last_ilayouts,
                                    std::vector<Layout> *olayouts) {

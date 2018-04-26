@@ -66,7 +66,7 @@ inline bool Pool2DInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool Pool2DCorrectLayout(const NodeAttrs &attrs,
+inline bool Pool2DCorrectLayout(const NodeAttrs& attrs,
                                 std::vector<Layout> *ilayouts,
                                 const std::vector<Layout> *last_ilayouts,
                                 std::vector<Layout> *olayouts) {
@@ -252,7 +252,7 @@ inline bool GlobalPool2DInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool GlobalPool2DCorrectLayout(const NodeAttrs &attrs,
+inline bool GlobalPool2DCorrectLayout(const NodeAttrs& attrs,
                                       std::vector<Layout> *ilayouts,
                                       const std::vector<Layout> *last_ilayouts,
                                       std::vector<Layout> *olayouts) {

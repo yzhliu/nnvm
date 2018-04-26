@@ -128,7 +128,7 @@ inline bool BinaryBroadcastShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool BinaryBroadcastCorrectLayout(const NodeAttrs &attrs,
+inline bool BinaryBroadcastCorrectLayout(const NodeAttrs& attrs,
                                          std::vector<Layout> *ilayouts,
                                          const std::vector<Layout> *last_ilayouts,
                                          std::vector<Layout> *olayouts) {

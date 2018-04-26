@@ -41,7 +41,7 @@ inline bool DotShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool DotCorrectLayout(const NodeAttrs &attrs,
+inline bool DotCorrectLayout(const NodeAttrs& attrs,
                              std::vector<Layout> *ilayouts,
                              const std::vector<Layout> *last_ilayouts,
                              std::vector<Layout> *olayouts) {

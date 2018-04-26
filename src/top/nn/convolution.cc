@@ -129,7 +129,7 @@ inline bool Conv2DInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool Conv2DCorrectLayout(const NodeAttrs &attrs,
+inline bool Conv2DCorrectLayout(const NodeAttrs& attrs,
                                 std::vector<Layout> *ilayouts,
                                 const std::vector<Layout> *last_ilayouts,
                                 std::vector<Layout> *olayouts) {
@@ -306,7 +306,7 @@ inline bool Conv2DTransposeInferShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-inline bool Conv2DTransposeCorrectLayout(const NodeAttrs &attrs,
+inline bool Conv2DTransposeCorrectLayout(const NodeAttrs& attrs,
                                          std::vector<Layout> *ilayouts,
                                          const std::vector<Layout> *last_ilayouts,
                                          std::vector<Layout> *olayouts) {
