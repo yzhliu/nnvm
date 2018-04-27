@@ -92,13 +92,12 @@ nnvm::Graph CorrectLayout(nnvm::Graph src) {
     }
 
     const auto& flayout = op_infer_layout[new_node->op()];
-    CHECK(flayout != nullptr) << "Attribute FInferLayout"
-                              << " is not registered by op " << inode.source->op()->name
-                              << " we are not able to complete layout transform.";
-    CHECK(flayout(new_node->attrs, &request_ilayouts, &last_request_ilayouts, &produce_olayouts))
+    if (flayout != nullptr) {
+      CHECK(flayout(new_node->attrs, &request_ilayouts, &last_request_ilayouts, &produce_olayouts))
         << "Layout infer fail";
-    CHECK_EQ(request_ilayouts.size(), num_inputs);
-    CHECK_EQ(produce_olayouts.size(), num_outputs);
+      CHECK_EQ(request_ilayouts.size(), num_inputs);
+      CHECK_EQ(produce_olayouts.size(), num_outputs);
+    }
 
     // update new layouts
     new_layouts[new_node.get()] = std::move(produce_olayouts);
