@@ -91,8 +91,8 @@ nnvm::Graph CorrectLayout(nnvm::Graph src) {
       }
     }
 
-    const auto& flayout = op_correct_layout[new_node->op()];
-    if (flayout != nullptr) {
+    if (op_correct_layout.count(new_node->op())) {
+      const auto &flayout = op_correct_layout[new_node->op()];
       CHECK(flayout(new_node->attrs, &request_ilayouts, &last_request_ilayouts, &produce_olayouts))
         << "Layout infer fail";
       CHECK_EQ(request_ilayouts.size(), num_inputs);
