@@ -140,7 +140,7 @@ def _update_shape_dtype(shape, dtype, params):
     return shape, dtype
 
 
-def optimize(graph, target, shape, dtype="float32", layout=None):
+def optimize(graph, shape, dtype="float32", layout=None):
     """Perform target and parameter invariant graph optimization.
 
     This is an advanced function that usually do not need to be called.
@@ -166,9 +166,7 @@ def optimize(graph, target, shape, dtype="float32", layout=None):
 
         graph = graph_attr.set_shape_inputs(graph, shape)
         graph = graph_attr.set_dtype_inputs(graph, dtype)
-        graph = graph.apply(["InferShape", "InferType"])
-        with target:
-            graph = graph.apply(["AlterOpLayout"])
+        graph = graph.apply(["InferShape", "InferType", "AlterOpLayout"])
         graph = graph_attr.set_layout_inputs(graph, layout)
         graph = graph.apply(["CorrectLayout"])
 
@@ -266,7 +264,8 @@ def build(graph, target=None, shape=None, dtype="float32",
     if _all_var_init:
         init_var = initialize_variables(shape, dtype)
     # Apply optimization
-    graph = optimize(graph, target, shape, dtype, layout)
+    with target:
+        graph = optimize(graph, shape, dtype, layout)
     # Precompute prune
     if params and cfg.pass_enabled("PrecomputePrune"):
         graph, params = precompute_prune(graph, params)
